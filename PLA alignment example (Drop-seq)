@@ -38,7 +38,7 @@ O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected_readcounts.txt.
 #Export the barcodes as text file: SEEneg-PLA_knee_barcodes.txt
 #****************************
 
-# # Export to digital count matrix
+# Export to digital count matrix
 java -jar PLA_alignment.jar DigitalCount \
 I=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellUMIcorrected.txt.gz \
 O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_dge.txt.gz \
