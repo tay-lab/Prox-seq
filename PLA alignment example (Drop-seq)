@@ -1,0 +1,43 @@
+# Below are an example of alignment process for PLA products, obtained from Drop-seq pipeline
+# Read 1 file is N703-SEEneg-PLA_S3_R1_001.fastq.gz
+# Read 2 file is N703-SEEneg-PLA_S3_R2_001.fastq.gz
+# barcode_cocktail_5.3.csv: a csv file containing protein names and their DNA barcodes in columns 1 and 2, respectivelly
+
+# Align raw reads
+java -jar PLA_alignment.jar ReadAlignmentDropSeq \
+R1=$my_dir/fastq/N703-SEEneg-PLA_S3_R1_001.fastq.gz \
+R2=$my_dir/fastq/N703-SEEneg-PLA_S3_R2_001.fastq.gz \
+ABfile=$my_dir/Alignments/barcode_cocktail_5.3.csv \
+O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned.txt.gz \
+SUMMARY=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_summary.txt \
+HEADER=TRUE
+
+# Cell barcode correction
+java -jar PLA_alignment.jar CellBarcodeCorrection \
+I=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned.txt.gz \
+O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected.txt.gz \
+CELL_BC_LIST=$my_dir/Alignments/SEEneg-cDNA/STAR_SEEneg-cDNA_readcounts.txt.gz \
+READCOUNT_CUTOFF=100 \
+SUMMARY=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected_summary.txt \
+HEADER=TRUE
+
+# UMI merging
+java -jar PLA_alignment.jar UMIMerging \
+I=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected.txt.gz \
+O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellUMIcorrected.txt.gz \
+SUMMARY=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellUMIcorrected_summary.txt
+
+# Histogram of readcount (to draw kneeplot)
+java -jar PLA_alignment.jar ReadcountHistogram \
+I=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected.txt.gz \
+O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected_readcounts.txt.gz
+
+#****************************
+#Get the cell barcodes from the knee plot
+#Export the barcodes as text file: SEEneg-PLA_knee_barcodes.txt
+#****************************
+
+# # Export to digital count matrix
+# java -jar $my_dir/Alignments/PLA_alignment.jar DigitalCount \
+# I=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellUMIcorrected.txt.gz \
+# O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_dge.txt.gz \
