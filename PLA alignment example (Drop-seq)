@@ -34,8 +34,8 @@ I=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected.txt.gz \
 O=$my_dir/Alignments/SEEneg-PLA/SEEneg-PLA_aligned_cellcorrected_readcounts.txt.gz
 
 #****************************
-#Get the cell barcodes from the knee plot
-#Export the barcodes as text file: SEEneg-PLA_knee_barcodes.txt
+# Use PLA_aligned_cellcorrected_readcounts.txt.gz to produce a knee plot as per Drop-seq protocol.
+# Export the chosen cell barcodes as a text file: SEEneg-PLA_knee_barcodes.txt
 #****************************
 
 # Export to digital count matrix
