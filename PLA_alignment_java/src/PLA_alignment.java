@@ -1050,6 +1050,75 @@ public class PLA_alignment
 
 		
 		/**
+		 * Check if any UMIs map to more than 1 PLA product
+		 * 		I=... O=...
+		 * Input arguments:
+		 * 		I: path to aligned/cell barcode-corrected file (txt.gz format)
+		 * 		O: path to output multi-mapping UMIs (tab-separated, txt.gz format)
+		 */
+		
+		case "CheckUMIMapping":
+		{
+			// Parse the arguments
+			String I = "", O = "";
+			for (int i=1; i<args.length; i++)
+			{
+				String[] j = args[i].split("=");
+				
+				if (j.length < 2) {throw new java.lang.IllegalArgumentException("Whitespaces are not allowed between argument key specifier and the argument!");}
+				
+				switch (j[0])
+				{
+				case "I": I = j[1]; break;
+				case "O": O = j[1]; break;
+				default: throw new java.lang.IllegalArgumentException("Invalid argument key specifier!");
+				}
+			}
+			
+			try (
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))) // output file
+				  )
+			{
+				// Write out the command line arguments
+				for (String j : args)
+				{
+					System.out.println(j);
+				}
+				System.out.printf("%n");
+				
+				// Initialize a SetMultimap
+				// keys: unique cell barcode-UMI combinations (sorted alphabetically)
+				// values: set of corresponding unique PLA products
+				SetMultimap<String, String> UMI_multimap = MultimapBuilder.treeKeys().hashSetValues().build();
+				
+				// Add the aligned reads to the multimap
+				String line;
+				while ((line = brI.readLine()) != null)
+				{
+					String[] values = line.split(",");
+					UMI_multimap.put(values[0] + "_" + values[1], values[2] + ":" + values[3]);
+				}
+				
+				// Export duplicated UMI mappings
+				Set<String> temp_values = new HashSet<>();
+				for (String i : UMI_multimap.keySet())
+				{
+					temp_values = UMI_multimap.get(i);
+					if (temp_values.size() > 1)
+					{
+						bwout.write(i + "\t" + temp_values);
+						bwout.newLine();
+					}
+				}
+				
+			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
+			
+			break;
+		}
+		
+		
+		/**
 		 * Perform UMI merging on cell barcode-corrected PLA products
 		 * 		I=... O=... SUMMARY=...
 		 * Input arguments:
