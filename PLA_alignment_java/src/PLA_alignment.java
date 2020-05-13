@@ -82,7 +82,7 @@ public class PLA_alignment
 			
 			// Parse the arguments
 			String R1 = "", R2 = "", ABfile = "", O = "";
-			String SUMMARY = System.getProperty("user.dir") + File.separator + "ReadAlignment_summary.txt"; // default summary file directory
+			String SUMMARY = System.getProperty("user.dir") + File.separator + "ReadAlignmentDropSeq_summary.txt"; // default summary file directory
 			boolean skip_header=false;
 			for (int i=1; i<args.length; i++)
 			{
@@ -155,7 +155,7 @@ public class PLA_alignment
 				
 				// Start reading
 				long my_timer = System.currentTimeMillis();
-				System.out.printf("%10s   %-8s   Start alignment%n", LocalDate.now(), LocalTime.now().withNano(0));
+				System.out.printf("%10s   %-8s   ReadAlignmentDropSeq   Start alignment%n", LocalDate.now(), LocalTime.now().withNano(0));
 				bwsum.write("Start alignment at " + LocalDateTime.now()); bwsum.newLine();
 				
 				while (((line1=br1.readLine()) != null) && ((line2=br2.readLine()) != null))
@@ -302,7 +302,7 @@ public class PLA_alignment
 						
 						if ((((counter-1)/4+1) % 1000000) == 0)
 						{
-							System.out.printf("%10s   %-8s   ReadAlignment   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+							System.out.printf("%10s   %-8s   ReadAlignmentDropSeq   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
 									LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 							my_timer = System.currentTimeMillis();
 						}
@@ -315,11 +315,11 @@ public class PLA_alignment
 				}
 				
 				
-				System.out.printf("%10s   %-8s   Finished alignment, processed %,d records%n", LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1);
+				System.out.printf("%10s   %-8s   ReadAlignmentDropSeq   Done: processed %,d records%n", LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1);
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
 				
 				// Write to summary file
-				bwsum.write("Finished alignment at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " records"); bwsum.newLine();
+				bwsum.write("ReadAlignmentDropseq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " records"); bwsum.newLine();
 				bwsum.write("Number of valid PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of read 2 being too short: " + String.format("%,d",short_read_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of excessive G in UMIs: " + String.format("%,d",badUMI_counter)); bwsum.newLine();
@@ -359,7 +359,7 @@ public class PLA_alignment
 			String R1 = "", ABfile = "", O = "";
 			double DOWNSAMPLE = 1;
 			int SEED = 1;
-			String SUMMARY = System.getProperty("user.dir") + File.separator + "ReadAlignment_summary.txt"; // default summary file directory
+			String SUMMARY = System.getProperty("user.dir") + File.separator + "ReadAlignmentSmartSeq_summary.txt"; // default summary file directory
 			boolean skip_header=false;
 			for (int i=1; i<args.length; i++)
 			{
@@ -466,7 +466,7 @@ public class PLA_alignment
 							{
 								if ((((counter-1)/4+1) % 1_000_000) == 0)
 								{
-									System.out.printf("%10s   %-8s   ReadAlignment   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+									System.out.printf("%10s   %-8s   ReadAlignmentSmartSeq   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
 											LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 									my_timer = System.currentTimeMillis();
 								}
@@ -495,7 +495,7 @@ public class PLA_alignment
 						{
 							if ((((counter-1)/4+1) % 1_000_000) == 0)
 							{
-								System.out.printf("%10s   %-8s   ReadAlignment   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+								System.out.printf("%10s   %-8s   ReadAlignmentSmartSeq   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
 										LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 								my_timer = System.currentTimeMillis();
 							}
@@ -657,9 +657,9 @@ public class PLA_alignment
 						
 						
 						
-						if ((((counter-1)/4+1) % 1000000) == 0)
+						if ((((counter-1)/4+1) % 1_000_000) == 0)
 						{
-							System.out.printf("%10s   %-8s   ReadAlignment   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+							System.out.printf("%10s   %-8s   ReadAlignmentSmartSeq   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
 									LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 							my_timer = System.currentTimeMillis();
 						}
@@ -672,11 +672,11 @@ public class PLA_alignment
 				}
 				
 				
-				System.out.printf("%10s   %-8s   Finished alignment, processed %,d reads%n", LocalDate.now(), LocalTime.now().withNano(0), (counter+1)/4);
+				System.out.printf("%10s   %-8s   ReadAlignmentSmartSeq   Done: processed %,d reads%n", LocalDate.now(), LocalTime.now().withNano(0), (counter+1)/4);
 				System.out.printf("\tNumber of reads with a valid PLA product: %,15d%n", PLA_counter);
 				
 				// Write to summary file
-				bwsum.write("Finished alignment at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " reads"); bwsum.newLine();
+				bwsum.write("ReadAlignmentSmartSeq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " reads"); bwsum.newLine();
 				bwsum.write("Number of reads that are processed: " + String.format("%,d", downsample_counter)); bwsum.newLine();
 				bwsum.write("Number of reads with a valid PLA product: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
@@ -871,7 +871,7 @@ public class PLA_alignment
 					cellBCarraylist_2.add(temparray_2);
 				}
 				
-				System.out.printf("%10s   %-8s   CellBarcodeCorrection   Done: read %,d cell barcodes%n", LocalDate.now(), LocalTime.now().withNano(0), ref_counter);
+				System.out.printf("%10s   %-8s   CellBarcodeCorrection   Finish reading %,d cell barcodes%n", LocalDate.now(), LocalTime.now().withNano(0), ref_counter);
 				
 				
 				// n-gram method: takes into account N
@@ -1033,11 +1033,11 @@ public class PLA_alignment
 					
 				}
 				
-				System.out.printf("%10s   %-8s   Finished cell barcode correction%n", LocalDate.now(), LocalTime.now().withNano(0));
+				System.out.printf("%10s   %-8s   CellBarcodeCorrection   Done%n", LocalDate.now(), LocalTime.now().withNano(0));
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
 				
 				// Write to summary file
-				bwsum.write("Finished cell barcode correction at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
+				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
 				bwsum.write("Number of accepted PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of exact matches: " + String.format("%,d",exact_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded ambiguous reads: " + String.format("%,d",ambiguous_counter)); bwsum.newLine();
@@ -1092,6 +1092,10 @@ public class PLA_alignment
 				// values: set of corresponding unique PLA products
 				SetMultimap<String, String> UMI_multimap = MultimapBuilder.treeKeys().hashSetValues().build();
 				
+				// Time stamp
+				long my_timer = System.currentTimeMillis();
+				System.out.printf("%10s   %-8s   Start CheckUMIMapping%n", LocalDate.now(), LocalTime.now().withNano(0));
+				
 				// Add the aligned reads to the multimap
 				String line;
 				while ((line = brI.readLine()) != null)
@@ -1101,6 +1105,7 @@ public class PLA_alignment
 				}
 				
 				// Export duplicated UMI mappings
+				int counter = 0;
 				Set<String> temp_values = new HashSet<>();
 				for (String i : UMI_multimap.keySet())
 				{
@@ -1110,7 +1115,18 @@ public class PLA_alignment
 						bwout.write(i + "\t" + temp_values);
 						bwout.newLine();
 					}
+					counter++;
+					
+					if ((counter % 100_000) == 0)
+					{
+						System.out.printf("%10s   %-8s   CheckUMIMapping   Processed %,15d UMIs   Elapsed time for last 100,000 UMIs: %ds%n",
+								LocalDate.now(), LocalTime.now().withNano(0), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
+						my_timer = System.currentTimeMillis();
+					}
 				}
+				
+				// Time stamp
+				System.out.printf("%10s   %-8s   CheckUMIMapping   Done: processed %,d UMIs%n", LocalDate.now(), LocalTime.now().withNano(0), counter);
 				
 			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
 			
@@ -1174,8 +1190,8 @@ public class PLA_alignment
 				ListMultimap<String, Integer> PLAproductmap = ArrayListMultimap.create(); // ArrayListMultimap to store unique feature 1's and its index (for indexing UMIarray)
 				
 				// Read the file
-				System.out.printf("%10s   %-8s   UMIMerging   Start processing records%n", LocalDate.now(), LocalTime.now().withNano(0));
-				bwsum.write("Start UMI merging at " + LocalDateTime.now().withNano(0)); bwsum.newLine();
+				System.out.printf("%10s   %-8s   UMIMerging   Start pre-processing records%n", LocalDate.now(), LocalTime.now().withNano(0));
+				bwsum.write("Start UMIMerging at " + LocalDateTime.now().withNano(0)); bwsum.newLine();
 				long my_timer = System.currentTimeMillis();
 				String line;
 				int record_counter = 0;
@@ -1193,7 +1209,7 @@ public class PLA_alignment
 					}
 				}
 				
-				System.out.printf("%10s   %-8s   UMIMerging   Finished processing%n", LocalDate.now(), LocalTime.now().withNano(0));
+				System.out.printf("%10s   %-8s   UMIMerging   Finished pre-processing%n", LocalDate.now(), LocalTime.now().withNano(0));
 				System.out.printf("\tNumber of unique cell barcode-PLA pair combinations: %,15d%n", PLAproductmap.keySet().size());
 				
 				// Loop through each unique feature 1, and merge UMI from the same feature 1 that are within 1 hamming distance
@@ -1255,11 +1271,11 @@ public class PLA_alignment
 					}
 				}
 				
-				System.out.printf("%10s   %-8s   Finished UMI merging%n", LocalDate.now(), LocalTime.now().withNano(0));
+				System.out.printf("%10s   %-8s   UMIMerging   Done%n", LocalDate.now(), LocalTime.now().withNano(0));
 				System.out.printf("\tNumber of unique PLA products: %,15d%n", unique_counter);
 				
 				// Write to summary file
-				bwsum.write("Finished UMI merging at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " unique cell barcode-PLA pair combinations"); bwsum.newLine();
+				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " unique cell barcode-PLA pair combinations"); bwsum.newLine();
 				bwsum.write("Number of unique PLA products: " + String.format("%,d", unique_counter)); bwsum.newLine();
 
 				
@@ -1352,7 +1368,7 @@ public class PLA_alignment
 			// Parse the arguments
 			String I = "", O = "", cell_BC_path = "";
 			boolean skip_header = false;
-			String SUMMARY = System.getProperty("user.dir") + File.separator + "DigitalCount_summary.txt"; // default summary file directory
+			String SUMMARY = System.getProperty("user.dir") + File.separator + "DigitalCountDropSeq_summary.txt"; // default summary file directory
 			for (int i=1; i<args.length; i++)
 			{
 				String[] j = args[i].split("=");
@@ -1385,6 +1401,9 @@ public class PLA_alignment
 				}
 				bwsum.newLine();
 				System.out.printf("%n");
+				
+				// Time stamp
+				System.out.printf("%10s   %-8s   DigitalCountDropSeq   Start%n", LocalDate.now(), LocalTime.now().withNano(0));
 				
 				// Read the list of chosen cell barcodes
 				// hash set to store chosen cell barcodes, ordered by read counts from drop-seq tools (0 index = most reads)
@@ -1430,6 +1449,8 @@ public class PLA_alignment
 					bwout.newLine();
 				}
 				
+				// Time stamp
+				System.out.printf("%10s   %-8s   DigitalCountSmartSeq   Done%n", LocalDate.now(), LocalTime.now().withNano(0));
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
 						
@@ -1456,7 +1477,7 @@ public class PLA_alignment
 			// Parse the arguments
 			String dirI = "", O = "", ABfile = "";
 			boolean skip_header = false;
-			String SUMMARY = System.getProperty("user.dir") + File.separator + "DigitalCount_summary.txt"; // default summary file directory
+			String SUMMARY = System.getProperty("user.dir") + File.separator + "DigitalCountSmartSeq_summary.txt"; // default summary file directory
 			boolean remove_duplicate = false;
 			boolean export_duplicate = false;
 			for (int i=1; i<args.length; i++)
@@ -1493,7 +1514,7 @@ public class PLA_alignment
 				bwsum.newLine();
 				System.out.printf("%n");
 				
-				System.out.printf("%10s   %-8s   DigitalCountSmartSeq   Start reading antibody targets%n", LocalDate.now(), LocalTime.now().withNano(0));
+				System.out.printf("%10s   %-8s   DigitalCountSmartSeq   Start%n", LocalDate.now(), LocalTime.now().withNano(0));
 				
 				// Read the list of possible AB IDs
 				List<String> AB_list = new ArrayList<>();
@@ -1620,7 +1641,8 @@ public class PLA_alignment
 					throw new IllegalArgumentException("Empty file directory!");
 				}
 				
-				System.out.printf("%10s   %-8s   DigitalCountSmartSeq   Finished%n", LocalDate.now(), LocalTime.now().withNano(0));
+				// Time stamp
+				System.out.printf("%10s   %-8s   DigitalCountSmartSeq   Done%n", LocalDate.now(), LocalTime.now().withNano(0));
 				
 				// Record the number of removed duplicated counts
 				bwsum.write("Number of total PLA products across all samples: " + String.format("%,d",PLA_counter)); bwsum.newLine();
