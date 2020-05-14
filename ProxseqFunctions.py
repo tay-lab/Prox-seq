@@ -25,16 +25,30 @@ import itertools
 
 # =============================================================================
 # # Random point generators
+# # Return an n-by-3 array, where the columns are x, y and z coordinates
 # =============================================================================
-# Function to generate n random points on the surface of a unit sphere (http://mathworld.wolfram.com/SpherePointPicking.html)
-# Return an n-by-3 array, where the columns are x, y and z coordinates
-def randomPointGen3D(n):
+def randomPointGen2D(n):
+    # Generate n random points on the surface of a unit sphere
+    # Ref: http://mathworld.wolfram.com/SpherePointPicking.html
+    
     theta = np.random.uniform(0, 2*math.pi, size=(n,))
     z = np.random.uniform(-1,1, size=(n,))
     x = np.sqrt(1-z**2)*np.cos(theta)
     y = np.sqrt(1-z**2)*np.sin(theta)
 
     return np.array([x,y,z]).T
+
+def randomPointGen3D(n):
+    # Generate n random points inside a unit sphere
+    # Ref: https://math.stackexchange.com/questions/87230/picking-random-points-in-the-volume-of-sphere-with-uniform-probability/87238#87238
+    u = np.random.uniform(0,1, size=(n,))
+    x = np.random.normal(size=(n,))
+    y = np.random.normal(size=(n,))
+    z = np.random.normal(size=(n,))
+    
+    rescale = np.power(u,1/3) / np.sqrt(x*x+y*y+z*z)
+    
+    return (np.array([x,y,z]) * rescale).T
 
 # =============================================================================
 # # Simulate single cell PLA data
@@ -44,7 +58,10 @@ def randomPointGen3D(n):
 # # If a pair of PLA probes A and B are within a certain distance (ie, the ligation distance), they are ligated
 # # If more than one pair of probes are within the ligation distance, there are 2 options: all of them are ligated, or only one pair is
 # =============================================================================
-def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50, n_cells=100, ligation_efficiency=1, ligate_all=False, cell_variance=True, seed_num=None, sep=':'):
+def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
+                n_cells=100, ligation_efficiency=1, ligate_all=False,
+                cell_variance=True, mode='2D',
+                seed_num=None, sep=':'):
     # A function to simulate PLA counts of a cocktail of N targets
     # Input:
     #   num_complex (N-by-N): the number of complexes on each cell (entry [i,j] is the abundance of complex i:j)
@@ -56,6 +73,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50, n_
     #   ligation_efficiency: the chance of a PLA pair being ligated
     #   ligate_all: whether only 1 PLA pair or all pairs are allowed to be ligated
     #   cell_variance: whether to simulate variance due to cell size (log normal distribution)
+    #   mode: 2D (PLA probes are on cell surface, default) or 3D (PLA probes are intracellular)
     #   seed_num: seed number for RNG
     #   sep: separator format for PLA product (default is ':')
     # Output:
@@ -108,7 +126,10 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50, n_
         dge_actual_complexes[cell_i] = num_complex_i.reshape(-1,)
 
         # Randomly distribute the protein targets
-        protein_target_i = cell_d/2*randomPointGen3D(num_complex_i.sum())
+        if mode == '2D':
+            protein_target_i = cell_d/2*randomPointGen2D(num_complex_i.sum())
+        elif mode == '3D':
+            protein_target_i = cell_d/2*randomPointGen3D(num_complex_i.sum())
 
         # Probe binding is assumed to be saturated, so all protein targets have probe A and probe B
         probeA_i = copy.deepcopy(protein_target_i)
@@ -120,10 +141,16 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50, n_
 
         # Add non-specific binding
         if probeA_ns.sum() > 0:
-            probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen3D(probeA_ns_i.sum())))
+            if mode == '2D':
+                probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen2D(probeA_ns_i.sum())))
+            elif mode == '3D':
+                probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen3D(probeA_ns_i.sum())))
             probeA_target = np.concatenate((probeA_target, np.repeat(range(N_targets),probeA_ns_i)))
         if probeB_ns.sum() > 0:
-            probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen3D(probeB_ns_i.sum())))
+            if mode == '2D':
+                probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen2D(probeB_ns_i.sum())))
+            elif mode == '3D':
+                probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen3D(probeB_ns_i.sum())))
             probeB_target = np.concatenate((probeB_target, np.repeat(range(N_targets),probeB_ns_i)))
 
         # Calculate pairwise euclidean distance
