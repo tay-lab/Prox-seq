@@ -62,36 +62,70 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
                 n_cells=100, ligation_efficiency=1, ligate_all=False,
                 cell_variance=True, mode='2D',
                 seed_num=None, sep=':'):
-    # A function to simulate PLA counts of a cocktail of N targets
-    # Input:
-    #   num_complex (N-by-N): the number of complexes on each cell (entry [i,j] is the abundance of complex i:j)
-    #   probeA_ns (N-by-1): the number of expressed proteins bound by probe A (entry [i] is the abundance of non-complex forming protein i, bound by PLA probe A)
-    #   probeB_ns (N-by-1): the number of expressed proteins bound by probe B (entry [j] is the abundance of non-complex forming protein j, bound by PLA probe B)
-    #   cell_d: cell diameter in nanometer
-    #   PLA_dist: ligation distance in nanometer
-    #   n_cells: number of cells to simulate
-    #   ligation_efficiency: the chance of a PLA pair being ligated
-    #   ligate_all: whether only 1 PLA pair or all pairs are allowed to be ligated
-    #   cell_variance: whether to simulate variance due to cell size (log normal distribution)
-    #   mode: 2D (PLA probes are on cell surface, default) or 3D (PLA probes are intracellular)
-    #   seed_num: seed number for RNG
-    #   sep: separator format for PLA product (default is ':')
-    # Output:
-    #   dge: simulated PLA count data
-    #   dge_actual_complexes: simulated complex abundance
+    '''
+    A function to simulate PLA counts of a cocktail of N targets.
+    
+    Parameters
+    ----------
+    num_complex : numpy array 
+        An NA-by-NB array containing the number of complexes on each cell
+        (NA and NB is the number of targets of probe A and B), and element ij is
+        the abundance of complex i:j.
+    probeA_ns : numpy array
+        An NA-by-1 array containing the number of expressed proteins bound by
+        probe A (entry [i] is the abundance of non-complex forming protein i,
+                 bound by PLA probe A).
+    probeB_ns : numpy array
+        An NB-by-1 array containing the number of expressed proteins bound by
+        probe B (entry [j] is the abundance of non-complex forming protein j,
+                 bound by PLA probe B).
+    cell_d : float
+        The cell diameter in nanometer.
+        Default is 50.
+    PLA_dist : float
+        The ligation distance in nanometer.
+        Default is 10,000.
+    n_cells : int
+        The number of cells to simulate.
+    ligation_efficiency : float
+        The chance of a PLA pair being ligated (between 0 and 1).
+    ligate_all : boolean
+        Whether only 1 PLA pair or all pairs are allowed to be ligated.
+        Default is False
+    cell_variance : boolean
+        Whether to simulate variance due to cell size (log normal distribution).
+        Default is True
+    mode : string
+        '2D' (PLA probes are on cell surface, default) or '3D' (PLA probes are
+                                                                intracellular).
+    seed_num : float
+        The seed number for RNG.
+    sep: string
+        The separator format for PLA product.
+        Default is ':'.
+    
+    Returns
+    -------
+    dge : pandas data frame
+        The simulated PLA count data.
+    dge_actual_complexes : pandas data frame
+        The simulated complex abundance.
+    '''
 
     # Seed number
     np.random.seed(seed_num)
     random.seed(seed_num)
 
-    # Number of targets
     num_complex = np.array(num_complex)
-    N_targets = num_complex.shape[0]
+    
+    # Number of probe A and B targets
+    NA_targets = num_complex.shape[0]
+    NB_targets = num_complex.shape[1]
 
     # Initialize dge dictionary
     dge = {}
     # Look up dictionary: key is the complex identity, value is its index (or row number in dge matrix)
-    complex_ind = {f'{i}{sep}{j}':(i*N_targets+j) for i in range(N_targets) for j in range(N_targets)}
+    complex_ind = {f'{i}{sep}{j}':(i*NB_targets+j) for i in range(NA_targets) for j in range(NB_targets)}
 
     # Index matrix: to track the identity of each probe A and B
     probeA_ind = np.array([s.split(sep)[0] for s in complex_ind.keys()]) # element ij = i (ie, target of probe A)
@@ -101,7 +135,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     probeA_ns = np.array(probeA_ns)
     probeB_ns = np.array(probeB_ns)
 
-    # Data frame to store scaled complex amount of each single cell
+    # Dictionary to store scaled complex amount of each single cell
     dge_actual_complexes = {}
 
     # Start simulation
@@ -109,7 +143,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     print(f'{datetime.datetime.now().replace(microsecond=0)}     Start simulation')
     for cell_i in range(n_cells):
 
-        dge[cell_i] = np.zeros((N_targets**2,))
+        dge[cell_i] = np.zeros((NA_targets*NB_targets,))
 
         # Add cell variance with log-normal distribution
         if cell_variance:
@@ -125,7 +159,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
         # Save the actual complex amount
         dge_actual_complexes[cell_i] = num_complex_i.reshape(-1,)
 
-        # Randomly distribute the protein targets
+        # Randomly distribute the protein complexes
         if mode == '2D':
             protein_target_i = cell_d/2*randomPointGen2D(num_complex_i.sum())
         elif mode == '3D':
@@ -145,13 +179,13 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
                 probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen2D(probeA_ns_i.sum())))
             elif mode == '3D':
                 probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen3D(probeA_ns_i.sum())))
-            probeA_target = np.concatenate((probeA_target, np.repeat(range(N_targets),probeA_ns_i)))
+            probeA_target = np.concatenate((probeA_target, np.repeat(range(NA_targets),probeA_ns_i)))
         if probeB_ns.sum() > 0:
             if mode == '2D':
                 probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen2D(probeB_ns_i.sum())))
             elif mode == '3D':
                 probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen3D(probeB_ns_i.sum())))
-            probeB_target = np.concatenate((probeB_target, np.repeat(range(N_targets),probeB_ns_i)))
+            probeB_target = np.concatenate((probeB_target, np.repeat(range(NB_targets),probeB_ns_i)))
 
         # Calculate pairwise euclidean distance
         pairwise_dist = spatial.distance.cdist(probeA_i, probeB_i, metric="euclidean")
@@ -195,7 +229,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
             print(f'{datetime.datetime.now().replace(microsecond=0)}     Processed {cell_i+1:>5} cells')
 
     # Convert dictionary to pandas data frame
-    complex_ind_new = [f'{i+1}{sep}{j+1}' for i in range(N_targets) for j in range(N_targets)] # update protein id from 0 to 1, 1 to 2, etc.
+    complex_ind_new = [f'{i+1}{sep}{j+1}' for i in range(NA_targets) for j in range(NB_targets)] # update protein id from 0 to 1, 1 to 2, etc.
     dge = pd.DataFrame(dge, index=complex_ind_new)
     dge_actual_complexes = pd.DataFrame(dge_actual_complexes, index=complex_ind_new)
     return (dge, dge_actual_complexes)
@@ -207,12 +241,21 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
 # # where Xi,. means sum of Xi,j over all j
 # =============================================================================
 def calculateExpected(data, PLA_list=None, sep=':'):
-    # Input:
-    #   data: data frame of dge
-    #   PLA_list: list of PLA products for which expected count is calculated
-    #             if None, calculate expected count for all PLA products
-    # Output:
-    #   A data frame of expected count (rows = PLA, columns = single cells)
+    '''
+    Calculate the expected count of a PLA product using marginal probabilities.
+    
+    Parameters
+    ----------
+    data : pandas data frame
+        Input digital PLA count matrix.
+    PLA_list: list, optional
+        List of PLA products for which expected count is calculated.
+        If None (the default), calculate expected count for all PLA products.
+                  
+    Returns
+    -------
+    A data frame of expected count (rows = PLA, columns = single cells)
+    '''
 
     # Initialize output
     if PLA_list is None:
@@ -241,21 +284,44 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
 def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym_weight=0.25, df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
-    # Input:
-    #   data: dge data frame (columns are single cells)
-    #   non_complex: list of non-true complex
-    #   non_express: list of protein targets that do not form complexes (eg, isotype antibodies)
-    #   slope_cutoff: in each iteraction, complexes with (slope - 1) below this cutoff are considered non-complex
-    #   sym_weight: the weight factor used to enforce symmetry condition
-    #   df_guess: data frame of first guesses of true complex abundance (must be the same shape as df)
-    #             if None, use 0 as the first guess
-    #   start_complex: a list of complexes to estimate during the first iteration (ie, in the first iteration, only these complexes will be used for calculation)
-    #               if empty, perform calculation as normal through all complexes in the first iteration
-    #   nIter: max number of iterations to perform
-    #   tol: the allowed maximum change in solution between current and last iteration
-    #   sep: the separator convention in the PLA complexes (default is ':')
-    # Output:
-    #   A data frame with the same shape as df, containing estimated complex abundance
+    '''
+    Estimate complex abundance by iteratively solving a system of quadratic equations.
+    
+    Parameters
+    ----------
+    data : pandas data frame
+        Input digital PLA expression matrix (PLA products x single cells).
+    non_complex : list
+        List of non-complex-forming PLA products.
+        Default is [].
+    non_express : list
+        List of protein targets that do not form complexes (eg, isotype antibodies).
+        Default is [].
+    mean_cutoff : float
+        PLA products whose estimated complex abundance at each iteration fails
+        the 1-sided t-test sample mean>mean_cutoff is kept as 0.
+    sym_weight : float (0 <= sym_weight <= 1)
+        The weight factor used to enforce symmetry condition.
+    df_guess : pandas data frame
+        First guesses of true complex abundance (must be the same shape as data).
+        If None (the default), use 0 as the first guess.
+    start_complex : list
+         List of complexes to estimate during the first iteration (ie, in the
+         first iteration, only these complexes will be used for calculation).
+    nIter : int
+        Max number of iterations to perform.
+    tol : float
+        If the change in solution between current and last iteration is below
+        this value, convergence is reached.
+    sep : string
+        The separator convention in the names of PLA complexes.
+        Default is ':'.
+
+    Returns
+    -------
+    A data frame with the same shape as df, containing estimated complex abundance
+    
+    '''
 
     # Convert input data frame into numpy array
     dge = data.copy().values
@@ -334,3 +400,225 @@ def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym
 
     print(f"estimateComplexes done: Loop number {loop_num}, tolerance {max_change:.2f}")
     return pd.DataFrame(data=dge_out, index=data.index, columns=data.columns)
+
+# =============================================================================
+# # Function to estimate probe abundance and complex abundance using the multinomial model
+# =============================================================================
+def myObjFun(counts, Ak, Bk, ckl):
+    '''
+    Objective function: negative log-likehood function.
+
+    Parameters
+    ----------
+    counts : 2D numpy array
+        Array of PLA product count of a single cell, where element ij is the
+        count of PLA product i:j.
+    Ak : 1D numpy array
+        Array of current estimated abundance of all probes A, where i-th element
+        is the estimated abundance of probe Ai.
+    Bk : 1D numpy array
+        Array of current estimated abundance of all probes B.
+    ckl : 2D numpy array
+        Array of estimated complex abundance of a single cell, where element ij
+        is the count of complex i:j.
+
+    Returns
+    -------
+    The value of the negative log-likehood function
+
+    '''
+    # p: the scaling factor for product Ai*Bj
+    p = 1/(counts.sum())
+    
+    B_grid, A_grid = np.meshgrid(Bk, Ak)
+    prod_AB = A_grid * B_grid
+    
+    # Deal with zeros in log
+    term1 = p*prod_AB + ckl
+    term1[term1==0] = 1
+
+    return -(counts*np.log(term1)).sum() + counts.sum()*np.log((p*prod_AB+ckl).sum())
+
+def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
+                      tol1=1e-3, tol2=1e-3, tol3=1e-3, sep=':'):
+    '''
+    Projected gradient descent algorithm to minimize myObjFun().
+
+    Parameters
+    ----------
+    data : pandas series
+        Array storing the PLA products count of a single cell, ordered by probe
+        A target, then probe B target (ie, [1:1, 1:2, 1:3,..., 3:1, 3:2, 3:3,...]).
+    non_complex : list, optional
+        List of PLA products or proteins that do no form protein complexes.
+        Example: X:Y means X:Y does not form a complex, while X means X does
+        not form complexes with any other proteins.
+        Default is [].
+    nIter : int, optional
+        The number of maximum iterations to perform.
+        Default is 100.
+    step0 : float, optional
+        Initial step size for gradient descent.
+        Default is 1.
+    tol1 : float, optional
+        Convergence condition 1: if the gradient's norm is below this value,
+        convergence is reached.
+        Default is 1e-3.
+    tol2 : float, optional
+        Convergence condition 2: if the change in negative log-likelihood
+        function is below this value, convergence is reached.
+        Default is 1e-3.
+    tol3 : float, optional
+        Convergence condition 3: if the percentage change in negative
+        log-likelihood function is below this value, convergence is reached.
+        Default is 1e-3.
+    sep : string, optional
+        The separator convention in the names of PLA complexes.
+        Default is ':'.
+
+    Returns
+    -------
+    Ak : 1D numpy array
+        Array of current estimated abundance of all probes A, where i-th element
+        is the estimated abundance of probe Ai.
+    Bk : 1D numpy array
+        Array of current estimated abundance of all probes B.
+    ckl : 2D numpy array
+        Array of estimated complex abundance of a single cell, where element ij
+        is the count of complex i:j.
+    convergence_out : pandas data frame
+        Return the convergence values for the algorithm at each iteration,
+        including the objective function's value, the norm of the gradient,
+        and the step size.
+    d_Ak : 1D array
+        Derivative of objective function w.r.t. Ak.
+    d_Bk : 1D array
+        Derivative of objective function w.r.t. Bk.
+    d_ckl : 1D array
+        Derivative of objective function w.r.t. ckl.
+
+    '''
+    # # Sort data frame by index (ie, PLA products name)
+    # data.sort_index(inplace=True)
+    
+    # Identity of antibody A and B
+    Ai = [s.split(sep)[0] for s in data.index]
+    Bj = [s.split(sep)[1] for s in data.index]
+    
+    # Get the array of (unique) targets
+    i_targets = np.sort(np.array(list(set(Ai))))
+    j_targets = np.sort(np.array(list(set(Bj))))
+    
+    # Counts data reshaped into non_complex's format
+    # rows are target of antibody A, columns are target of antibody B
+    counts = data.to_numpy().reshape((len(i_targets), len(j_targets)))
+    
+    # # Remove rows and columns that only contain 0
+    # i_targets = i_targets[counts.sum(axis=1)>0]
+    # j_targets = j_targets[counts.sum(axis=0)>0]
+    # counts = counts[counts.sum(axis=1)>0,:]
+    # counts = counts[:,counts.sum(axis=0)>0]
+    
+    # Initializes Ak, Bk and ckl
+    Ak = counts.sum(axis=1)
+    Bk = counts.sum(axis=0)
+    # Ak[:] = Ak.min()
+    # Bk[:] = Bk.min()
+    ckl = np.zeros(counts.shape)
+    
+    # Scaling factor for product Ai*Bj
+    p = 1/(counts.sum())
+
+    # Convert list of non-complex-forming products into a matrix of indicator: 1 = non-complex forming
+    # Same format as cij
+    non_complex_indicator = np.zeros(ckl.shape)
+    if non_complex:  
+        for s in non_complex:
+            if sep in s:
+                i1, i2 = s.split(sep)
+                non_complex_indicator[i_targets==i1, j_targets==i2] = 1
+            else:
+                non_complex_indicator[i_targets==s,:] = 1
+                non_complex_indicator[:,j_targets==s] = 1
+
+    # a dictionary to store the value of negative log likelihood function after each iteration, the norm of the gradient, and the corresponding step size
+    convergence_out = {'ObjFun':[], 'gradnorm':[],'step':[]} 
+
+    # Gradient descent
+    # Projected gradient descent: handles positive bounds (https://angms.science/doc/CVX/CVX_PGD.pdf)
+    
+    step_sizes = [] # store step size values
+    for _ in range(nIter):
+        B_grid, A_grid = np.meshgrid(Bk, Ak)
+        prod_AB = A_grid * B_grid
+        
+        # Current negative log likelihood
+        current_ObjFun = myObjFun(counts, Ak, Bk, ckl)
+        
+        # Derivative w.r.t. Ak
+        d_Ak = -(counts*p*B_grid/(p*prod_AB + ckl)).sum(axis=1) + counts.sum()*p*B_grid.sum(axis=1)/(p*prod_AB+ckl).sum()
+        
+        # Derivative w.r.t. Bk
+        d_Bk = -(counts*p*A_grid/(p*prod_AB + ckl)).sum(axis=0) + counts.sum()*p*A_grid.sum(axis=0)/(p*prod_AB+ckl).sum()
+        
+        # Derivative w.r.t. ckl
+        c_const = counts.sum()/(p*prod_AB + ckl).sum()
+        d_ckl = -counts/(p*prod_AB + ckl) + c_const
+        d_ckl[non_complex_indicator==1] = 0
+        
+        # Due to projection and drop-out, sometimes the derivatives can be zero
+        # Deal with these zeros by replacing np.nan and np.inf with 0
+        d_Ak[~np.isfinite(d_Ak)] = 0
+        d_Bk[~np.isfinite(d_Bk)] = 0
+        d_ckl[~np.isfinite(d_ckl)] = 0
+        
+        # Stop condition: sufficiently small gradient
+        grad_normsq = (d_Ak**2).sum() + (d_Bk**2).sum() + (d_ckl**2).sum()
+        convergence_out['gradnorm'].append(np.sqrt(grad_normsq))
+        if np.sqrt(grad_normsq) < tol1:
+            break
+        
+        # Step size: backtracking line search (Convex optimization, B & V, algorithm 9.2)
+        # alpha = 0.01, beta = 0.8
+        step = step0
+        while True: # decrease step size
+            temp_Ak = Ak - step*d_Ak
+            temp_Bk = Bk - step*d_Bk
+            temp_ckl = ckl - step*d_ckl
+            
+            # Project
+            temp_Ak[temp_Ak < 0] = 0
+            temp_Bk[temp_Bk < 0] = 0
+            temp_ckl[temp_ckl < 0] = 0
+            
+            # Backtracking line search
+            if myObjFun(counts, temp_Ak, temp_Bk, temp_ckl) > current_ObjFun - 0.01*step*grad_normsq:
+                step *= 0.8
+            else:
+                # Increment
+                Ak = temp_Ak
+                Bk = temp_Bk
+                ckl = temp_ckl
+                break
+
+        convergence_out['step'].append(step)
+        
+        new_ObjFun = myObjFun(counts, Ak, Bk, ckl)
+        convergence_out['ObjFun'].append(new_ObjFun)
+        
+        # Stop condition: negative loglikehood function converges
+        if (abs(current_ObjFun - new_ObjFun) < tol2) or (abs(current_ObjFun - new_ObjFun)/current_ObjFun*100 < tol3):
+            break
+        
+    # Create a dataframe of probes A and B abundance
+    Ak = pd.DataFrame(Ak, index=i_targets, columns=['Ak'])
+    Bk = pd.DataFrame(Bk, index=j_targets, columns=['Bk'])
+    # Create a dataframe of complex rate
+    ckl = pd.DataFrame(ckl, index=i_targets, columns=j_targets)
+    
+    # For rare cases where all PLA products are forced to be non-complex
+    if (not convergence_out['ObjFun']) or (not convergence_out['step']):
+        convergence_out['ObjFun'] = [np.nan]
+        convergence_out['step'] = [np.nan]
+    
+    return (Ak, Bk, ckl, pd.DataFrame(convergence_out), d_Ak, d_Bk, d_ckl)
