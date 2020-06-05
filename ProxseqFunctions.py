@@ -98,9 +98,10 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     mode : string
         '2D' (PLA probes are on cell surface, default) or '3D' (PLA probes are
                                                                 intracellular).
-    seed_num : float
+    seed_num : float, optional
         The seed number for RNG.
-    sep: string
+        Default is None.
+    sep: string, optional
         The separator format for PLA product.
         Default is ':'.
     
@@ -110,6 +111,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
         The simulated PLA count data.
     dge_actual_complexes : pandas data frame
         The simulated complex abundance.
+        
     '''
 
     # Seed number
@@ -234,6 +236,52 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     dge_actual_complexes = pd.DataFrame(dge_actual_complexes, index=complex_ind_new)
     return (dge, dge_actual_complexes)
 
+# =============================================================================
+# # Function to calculate the probe abundance
+# # Ei,j = (Xi,. + X.,j)/(X.,.)
+# # where Xi,. means sum of Xi,j over all j
+# =============================================================================
+def calculateProbeAbundance(data, sep=':'):
+    '''
+    Calculate probe abundance by summing the counts of probes A and B of each target.
+
+    Parameters
+    ----------
+    data : pandas data frame
+        DESCRIPTION.
+    sep : string, optional
+        The separator format for PLA product.
+        Default is ':'.
+
+    Returns
+    -------
+    Returns a pandas data frame.
+    Each row is the total abundance of probe A1, A2,... and B1, B2,...
+
+    '''
+    
+    # Get AB1 and AB2 of each row of data
+    AB1 = np.array([s.split(sep)[0] for s in data.index])
+    AB2 = np.array([s.split(sep)[1] for s in data.index])
+    
+    # Get the unique AB1 and AB2 probe targets
+    AB1_unique = list(set(AB1))
+    AB2_unique = list(set(AB2))
+    AB1_unique.sort()
+    AB2_unique.sort()
+    
+    # Initialize temporary data frames
+    output1 = pd.DataFrame(0, index=AB1_unique, columns=data.columns) # store abundance of all probe A
+    output2 = pd.DataFrame(0, index=AB2_unique, columns=data.columns) # store abundance of all probe B
+    
+    for i in output1.index:
+        output1.loc[i,:] = data.loc[AB1==i,:].sum(axis=0)
+    for i in output2.index:
+        output2.loc[i,:] = data.loc[AB2==i,:].sum(axis=0)
+    output1.index = [f"{i}_1" for i in output1.index]
+    output2.index = [f"{i}_2" for i in output2.index]
+    
+    return pd.concat([output1,output2])
 
 # =============================================================================
 # # Function to calculate the expected count of a PLA product according to the noise model
@@ -254,7 +302,8 @@ def calculateExpected(data, PLA_list=None, sep=':'):
                   
     Returns
     -------
-    A data frame of expected count (rows = PLA, columns = single cells)
+    A data frame of expected count (rows = PLA, columns = single cells).
+    
     '''
 
     # Initialize output
@@ -283,7 +332,7 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The adjustment values from the last iteration are used to update the adjustment values in the next iteration
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
-def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym_weight=0.25, df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
+def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
     '''
     Estimate complex abundance by iteratively solving a system of quadratic equations.
     
@@ -292,7 +341,9 @@ def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym
     data : pandas data frame
         Input digital PLA expression matrix (PLA products x single cells).
     non_complex : list
-        List of non-complex-forming PLA products.
+        List of PLA products or proteins that do no form protein complexes.
+        Example: X:Y means X:Y does not form a complex, while X means X does
+        not form complexes with any other proteins.
         Default is [].
     non_express : list
         List of protein targets that do not form complexes (eg, isotype antibodies).
@@ -300,7 +351,7 @@ def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym
     mean_cutoff : float
         PLA products whose estimated complex abundance at each iteration fails
         the 1-sided t-test sample mean>mean_cutoff is kept as 0.
-    sym_weight : float (0 <= sym_weight <= 1)
+    sym_weight : float (0 <= sym_weight <= 1).
         The weight factor used to enforce symmetry condition.
     df_guess : pandas data frame
         First guesses of true complex abundance (must be the same shape as data).
@@ -325,9 +376,8 @@ def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym
 
     # Convert input data frame into numpy array
     dge = data.copy().values
-    # Convert non_complex and non_express lists to sets
-    non_complexes = set(non_complexes)
-    non_express = set(non_express)
+    # Convert non_complexes list to sets
+    non_complex = set(non_complex)
     start_complex = set(start_complex)
 
     # Get a list of probe A and B targets
@@ -360,7 +410,7 @@ def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym
             temp_probeA, temp_probeB = temp_complex.split(sep) # target of probe A and B
 
             # Apply the constraints
-            if (temp_complex in non_complexes) or (temp_probeA in non_express) or (temp_probeB in non_express):
+            if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
                 temp_change[i,:] = 0
                 continue
 
@@ -404,7 +454,7 @@ def estimateComplexes(data, non_complexes=[], non_express=[], mean_cutoff=1, sym
 # =============================================================================
 # # Function to estimate probe abundance and complex abundance using the multinomial model
 # =============================================================================
-def myObjFun(counts, Ak, Bk, ckl):
+def myObjFun(counts, Ai, Bj, cij):
     '''
     Objective function: negative log-likehood function.
 
@@ -430,16 +480,16 @@ def myObjFun(counts, Ak, Bk, ckl):
     # p: the scaling factor for product Ai*Bj
     p = 1/(counts.sum())
     
-    B_grid, A_grid = np.meshgrid(Bk, Ak)
+    B_grid, A_grid = np.meshgrid(Bj, Ai)
     prod_AB = A_grid * B_grid
     
     # Deal with zeros in log
-    term1 = p*prod_AB + ckl
+    term1 = p*prod_AB + cij
     term1[term1==0] = 1
 
-    return -(counts*np.log(term1)).sum() + counts.sum()*np.log((p*prod_AB+ckl).sum())
+    return -(counts*np.log(term1)).sum() + counts.sum()*np.log((p*prod_AB+cij).sum())
 
-def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
+def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
                       tol1=1e-3, tol2=1e-3, tol3=1e-3, sep=':'):
     '''
     Projected gradient descent algorithm to minimize myObjFun().
@@ -478,15 +528,16 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
 
     Returns
     -------
-    Ak : 1D numpy array
+    A dictionary containing the following data:
+    Ai : 1D numpy array
         Array of current estimated abundance of all probes A, where i-th element
         is the estimated abundance of probe Ai.
-    Bk : 1D numpy array
+    Bj : 1D numpy array
         Array of current estimated abundance of all probes B.
-    ckl : 2D numpy array
+    cij : 2D numpy array
         Array of estimated complex abundance of a single cell, where element ij
         is the count of complex i:j.
-    convergence_out : pandas data frame
+    convergence_info : pandas data frame
         Return the convergence values for the algorithm at each iteration,
         including the objective function's value, the norm of the gradient,
         and the step size.
@@ -498,16 +549,17 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
         Derivative of objective function w.r.t. ckl.
 
     '''
-    # # Sort data frame by index (ie, PLA products name)
-    # data.sort_index(inplace=True)
     
-    # Identity of antibody A and B
-    Ai = [s.split(sep)[0] for s in data.index]
-    Bj = [s.split(sep)[1] for s in data.index]
+    # Identity of antibody A and B of each PLA product
+    i_targets_all = [s.split(sep)[0] for s in data.index]
+    j_targets_all = [s.split(sep)[1] for s in data.index]
     
-    # Get the array of (unique) targets
-    i_targets = np.sort(np.array(list(set(Ai))))
-    j_targets = np.sort(np.array(list(set(Bj))))
+    # Get the array of unique probe targets
+    i_targets = np.sort(np.array(list(set(i_targets_all))))
+    j_targets = np.sort(np.array(list(set(j_targets_all))))
+    
+    # Sort data frame by index alphabetically
+    data = data[[f"{i}{sep}{j}" for i in i_targets for j in j_targets]]
     
     # Counts data reshaped into non_complex's format
     # rows are target of antibody A, columns are target of antibody B
@@ -520,18 +572,18 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
     # counts = counts[:,counts.sum(axis=0)>0]
     
     # Initializes Ak, Bk and ckl
-    Ak = counts.sum(axis=1)
-    Bk = counts.sum(axis=0)
+    Ai = counts.sum(axis=1)
+    Bj = counts.sum(axis=0)
     # Ak[:] = Ak.min()
     # Bk[:] = Bk.min()
-    ckl = np.zeros(counts.shape)
+    cij = np.zeros(counts.shape)
     
     # Scaling factor for product Ai*Bj
     p = 1/(counts.sum())
 
     # Convert list of non-complex-forming products into a matrix of indicator: 1 = non-complex forming
     # Same format as cij
-    non_complex_indicator = np.zeros(ckl.shape)
+    non_complex_indicator = np.zeros(cij.shape)
     if non_complex:  
         for s in non_complex:
             if sep in s:
@@ -542,28 +594,28 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
                 non_complex_indicator[:,j_targets==s] = 1
 
     # a dictionary to store the value of negative log likelihood function after each iteration, the norm of the gradient, and the corresponding step size
-    convergence_out = {'ObjFun':[], 'gradnorm':[],'step':[]} 
+    convergence_info = {'ObjFun':[], 'gradnorm':[],'step':[]} 
 
     # Gradient descent
-    # Projected gradient descent: handles positive bounds (https://angms.science/doc/CVX/CVX_PGD.pdf)
+    # Projected gradient descent: handles positive bound constraint (https://angms.science/doc/CVX/CVX_PGD.pdf)
     
     step_sizes = [] # store step size values
     for _ in range(nIter):
-        B_grid, A_grid = np.meshgrid(Bk, Ak)
+        B_grid, A_grid = np.meshgrid(Bj, Ai)
         prod_AB = A_grid * B_grid
         
         # Current negative log likelihood
-        current_ObjFun = myObjFun(counts, Ak, Bk, ckl)
+        current_ObjFun = myObjFun(counts, Ai, Bj, cij)
         
         # Derivative w.r.t. Ak
-        d_Ak = -(counts*p*B_grid/(p*prod_AB + ckl)).sum(axis=1) + counts.sum()*p*B_grid.sum(axis=1)/(p*prod_AB+ckl).sum()
+        d_Ak = - np.nansum(counts*p*B_grid/(p*prod_AB + cij),axis=1) + counts.sum()*p*B_grid.sum(axis=1)/(p*prod_AB+cij).sum()
         
         # Derivative w.r.t. Bk
-        d_Bk = -(counts*p*A_grid/(p*prod_AB + ckl)).sum(axis=0) + counts.sum()*p*A_grid.sum(axis=0)/(p*prod_AB+ckl).sum()
-        
+        d_Bk = - np.nansum(counts*p*A_grid/(p*prod_AB + cij),axis=0) + counts.sum()*p*A_grid.sum(axis=0)/(p*prod_AB+cij).sum()
+
         # Derivative w.r.t. ckl
-        c_const = counts.sum()/(p*prod_AB + ckl).sum()
-        d_ckl = -counts/(p*prod_AB + ckl) + c_const
+        c_const = counts.sum()/(p*prod_AB + cij).sum()
+        d_ckl = -counts/(p*prod_AB + cij) + c_const
         d_ckl[non_complex_indicator==1] = 0
         
         # Due to projection and drop-out, sometimes the derivatives can be zero
@@ -574,7 +626,7 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
         
         # Stop condition: sufficiently small gradient
         grad_normsq = (d_Ak**2).sum() + (d_Bk**2).sum() + (d_ckl**2).sum()
-        convergence_out['gradnorm'].append(np.sqrt(grad_normsq))
+        convergence_info['gradnorm'].append(np.sqrt(grad_normsq))
         if np.sqrt(grad_normsq) < tol1:
             break
         
@@ -582,43 +634,48 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=1,
         # alpha = 0.01, beta = 0.8
         step = step0
         while True: # decrease step size
-            temp_Ak = Ak - step*d_Ak
-            temp_Bk = Bk - step*d_Bk
-            temp_ckl = ckl - step*d_ckl
+            temp_Ai = Ai - step*d_Ak
+            temp_Bj = Bj - step*d_Bk
+            temp_cij = cij - step*d_ckl
             
-            # Project
-            temp_Ak[temp_Ak < 0] = 0
-            temp_Bk[temp_Bk < 0] = 0
-            temp_ckl[temp_ckl < 0] = 0
+            # Projection
+            temp_Ai[temp_Ai < 0] = 0
+            temp_Bj[temp_Bj < 0] = 0
+            temp_cij[temp_cij < 0] = 0
             
             # Backtracking line search
-            if myObjFun(counts, temp_Ak, temp_Bk, temp_ckl) > current_ObjFun - 0.01*step*grad_normsq:
+            if myObjFun(counts, temp_Ai, temp_Bj, temp_cij) > current_ObjFun - 0.01*step*grad_normsq:
                 step *= 0.8
             else:
                 # Increment
-                Ak = temp_Ak
-                Bk = temp_Bk
-                ckl = temp_ckl
+                Ai = temp_Ai
+                Bj = temp_Bj
+                cij = temp_cij
                 break
 
-        convergence_out['step'].append(step)
-        
-        new_ObjFun = myObjFun(counts, Ak, Bk, ckl)
-        convergence_out['ObjFun'].append(new_ObjFun)
+        # Update convergence information
+        convergence_info['step'].append(step)
+        new_ObjFun = myObjFun(counts, Ai, Bj, cij)
+        convergence_info['ObjFun'].append(new_ObjFun)
         
         # Stop condition: negative loglikehood function converges
         if (abs(current_ObjFun - new_ObjFun) < tol2) or (abs(current_ObjFun - new_ObjFun)/current_ObjFun*100 < tol3):
             break
         
-    # Create a dataframe of probes A and B abundance
-    Ak = pd.DataFrame(Ak, index=i_targets, columns=['Ak'])
-    Bk = pd.DataFrame(Bk, index=j_targets, columns=['Bk'])
-    # Create a dataframe of complex rate
-    ckl = pd.DataFrame(ckl, index=i_targets, columns=j_targets)
+    # Create dataframe of probes A and B abundance, and complex abundance
+    Ai = pd.DataFrame(Ai, index=i_targets, columns=['Ai'])
+    Bj = pd.DataFrame(Bj, index=j_targets, columns=['Bj'])
+    cij = pd.DataFrame(cij, index=i_targets, columns=j_targets)
+    
+    # Create dataframes of derivatives
+    d_Ak = pd.DataFrame(d_Ak, index=i_targets, columns=['d_Ak'])
+    d_Bk = pd.DataFrame(d_Bk, index=j_targets, columns=['d_Bk'])
+    d_ckl = pd.DataFrame(d_ckl, index=i_targets, columns=j_targets)
     
     # For rare cases where all PLA products are forced to be non-complex
-    if (not convergence_out['ObjFun']) or (not convergence_out['step']):
-        convergence_out['ObjFun'] = [np.nan]
-        convergence_out['step'] = [np.nan]
+    if (not convergence_info['ObjFun']) or (not convergence_info['step']):
+        convergence_info['ObjFun'] = [np.nan]
+        convergence_info['step'] = [np.nan]
     
-    return (Ak, Bk, ckl, pd.DataFrame(convergence_out), d_Ak, d_Bk, d_ckl)
+    return {'Ai':Ai, 'Bj':Bj, 'cij':cij, 'convergence_info':pd.DataFrame(convergence_info),
+            'd_Ak':d_Ak, 'd_Bk':d_Bk, 'd_ckl':d_ckl}
