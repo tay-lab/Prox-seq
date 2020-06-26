@@ -332,7 +332,8 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The adjustment values from the last iteration are used to update the adjustment values in the next iteration
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
-def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
+def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
+                      df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
     '''
     Estimate complex abundance by iteratively solving a system of quadratic equations.
     
@@ -432,7 +433,8 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, df_g
             # Force negative values to be zero <---- should be done after t-test
             temp_diff[temp_diff < 0] = 0
 
-            # Check if observed is 0 but estimated is non 0, then force the estimated to be 0 <---- should be done after t-test
+            # Check if observed is 0 but estimated is non 0, then force the estimated to be 0
+            # This should only be done after t-test
             temp_diff[(temp_diff > 0) & (dge[i,:] == 0)] = 0
 
             # Store changes in the solutions/estimates
@@ -454,7 +456,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, df_g
 # =============================================================================
 # # Function to estimate probe abundance and complex abundance using the multinomial model
 # =============================================================================
-def myObjFun(counts, Ai, Bj, cij):
+def MultinomialObjFun(counts, Ai, Bj, cij, log_barrier=None, t_prime=2):
     '''
     Objective function: negative log-likehood function.
 
@@ -463,14 +465,22 @@ def myObjFun(counts, Ai, Bj, cij):
     counts : 2D numpy array
         Array of PLA product count of a single cell, where element ij is the
         count of PLA product i:j.
-    Ak : 1D numpy array
+    Ai : 1D numpy array
         Array of current estimated abundance of all probes A, where i-th element
         is the estimated abundance of probe Ai.
-    Bk : 1D numpy array
+    Bj : 1D numpy array
         Array of current estimated abundance of all probes B.
-    ckl : 2D numpy array
+    cij : 2D numpy array
         Array of estimated complex abundance of a single cell, where element ij
         is the count of complex i:j.
+    log_barrier: None or float, optional
+        The value of gamma used in the log barrier function. If None, the log
+        barrier is not applied to the objective function.
+        Default is None.
+    t_prime: float, optional
+        The value used in the log barrier function. Only used when log_barrier
+        is not None.
+        Default is 2.
 
     Returns
     -------
@@ -478,21 +488,38 @@ def myObjFun(counts, Ai, Bj, cij):
 
     '''
     # p: the scaling factor for product Ai*Bj
-    p = 1/(counts.sum())
+    # p = 1/(counts.sum())
+    p = 1/1000
     
     B_grid, A_grid = np.meshgrid(Bj, Ai)
     prod_AB = A_grid * B_grid
     
     # Deal with zeros in log
-    term1 = p*prod_AB + cij
-    term1[term1==0] = 1
+    term1 = np.log(p*prod_AB + cij)
+    term1[(prod_AB==0) & (cij==0)] = 0
+    
+    out = -(counts*term1).sum() + counts.sum()*np.log((p*prod_AB+cij).sum())
+    
+    # Add log-barrier
+    if log_barrier is not None:
+        if np.any((log_barrier*A_grid-cij < 0) | (log_barrier*B_grid-cij < 0)):
+            out = np.inf
+        else:
+            tempA = np.log(log_barrier*A_grid - cij)
+            tempB = np.log(log_barrier*B_grid - cij)
+            tempA[(A_grid==0) & (cij==0)] = 0
+            tempB[(B_grid==0) & (cij==0)] = 0
+            out -= (tempA + tempB).sum()/t_prime
 
-    return -(counts*np.log(term1)).sum() + counts.sum()*np.log((p*prod_AB+cij).sum())
+    return out
 
-def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
-                      tol1=1e-3, tol2=1e-3, tol3=1e-3, sep=':'):
+def GDSolver(data, non_complex=[],
+             Ai0=None, Bj0=None, cij0=None,
+             log_barrier=None, t_prime=2,
+             nIter=100, step0=10,
+             tol1=1e-3, tol2=1e-3, tol3=1e-3, sep=':'):
     '''
-    Projected gradient descent algorithm to minimize myObjFun().
+    Projected gradient descent algorithm to minimize MultinomialObjFun().
 
     Parameters
     ----------
@@ -504,12 +531,31 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
         Example: X:Y means X:Y does not form a complex, while X means X does
         not form complexes with any other proteins.
         Default is [].
+    Ai0 : numpy array, optional
+        Starting values for probe A abundance Ai. If None, use the abundance of
+        the corresponding PLA probes.
+        Default is None.
+    Bj0 : numpy array, optional
+        Starting values for probe B abundance Bj. If None, use the abundance of
+        the corresponding PLA probes.
+        Default is None.
+    cij0 : numpy array, optional
+        Starting values for complex abundance cij. If None, use 0.
+        Default is None.
+    log_barrier: None or float, optional
+        The value of gamma used in the log barrier function. If None, the log
+        barrier is not applied to the objective function.
+        Default is None.
+    t_prime: float, optional
+        The value used in the log barrier function. Only used when log_barrier
+        is not None.
+        Default is 2.
     nIter : int, optional
         The number of maximum iterations to perform.
         Default is 100.
     step0 : float, optional
         Initial step size for gradient descent.
-        Default is 1.
+        Default is 10.
     tol1 : float, optional
         Convergence condition 1: if the gradient's norm is below this value,
         convergence is reached.
@@ -572,14 +618,24 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
     # counts = counts[:,counts.sum(axis=0)>0]
     
     # Initializes Ak, Bk and ckl
-    Ai = counts.sum(axis=1)
-    Bj = counts.sum(axis=0)
+    if Ai0 is None:
+        Ai = counts.sum(axis=1)
+    else:
+        Ai = Ai0
+    if Bj0 is None:
+        Bj = counts.sum(axis=0)
+    else:
+        Bj = Bj0
     # Ak[:] = Ak.min()
     # Bk[:] = Bk.min()
-    cij = np.zeros(counts.shape)
+    if cij0 is None:
+        cij = np.zeros(counts.shape)
+    else:
+        cij = cij0
     
     # Scaling factor for product Ai*Bj
-    p = 1/(counts.sum())
+    # p = 1/(counts.sum())
+    p = 1/1000
 
     # Convert list of non-complex-forming products into a matrix of indicator: 1 = non-complex forming
     # Same format as cij
@@ -593,19 +649,20 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
                 non_complex_indicator[i_targets==s,:] = 1
                 non_complex_indicator[:,j_targets==s] = 1
 
-    # a dictionary to store the value of negative log likelihood function after each iteration, the norm of the gradient, and the corresponding step size
+    # A dictionary to store the value of negative log likelihood function after
+    # each iteration, the norm of the gradient, and the corresponding step size
     convergence_info = {'ObjFun':[], 'gradnorm':[],'step':[]} 
 
     # Gradient descent
-    # Projected gradient descent: handles positive bound constraint (https://angms.science/doc/CVX/CVX_PGD.pdf)
+    # Projected gradient descent: handles positive bound constraint ()
+    # log-barrier function: handles inequality constraint
     
-    step_sizes = [] # store step size values
     for _ in range(nIter):
         B_grid, A_grid = np.meshgrid(Bj, Ai)
         prod_AB = A_grid * B_grid
         
         # Current negative log likelihood
-        current_ObjFun = myObjFun(counts, Ai, Bj, cij)
+        current_ObjFun = MultinomialObjFun(counts, Ai, Bj, cij, log_barrier=log_barrier, t_prime=t_prime)
         
         # Derivative w.r.t. Ak
         d_Ak = - np.nansum(counts*p*B_grid/(p*prod_AB + cij),axis=1) + counts.sum()*p*B_grid.sum(axis=1)/(p*prod_AB+cij).sum()
@@ -616,13 +673,28 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
         # Derivative w.r.t. ckl
         c_const = counts.sum()/(p*prod_AB + cij).sum()
         d_ckl = -counts/(p*prod_AB + cij) + c_const
-        d_ckl[non_complex_indicator==1] = 0
+        
         
         # Due to projection and drop-out, sometimes the derivatives can be zero
         # Deal with these zeros by replacing np.nan and np.inf with 0
         d_Ak[~np.isfinite(d_Ak)] = 0
         d_Bk[~np.isfinite(d_Bk)] = 0
         d_ckl[~np.isfinite(d_ckl)] = 0
+        
+        # Add the derivative of the log-barrier function
+        if log_barrier is not None:
+            # Derivatives of log-barrier function
+            dphi_Ak = 1/t_prime/(log_barrier*A_grid - cij)
+            dphi_Ak[~np.isfinite(dphi_Ak)] = 0
+            dphi_Bk = 1/t_prime/(log_barrier*B_grid - cij)
+            dphi_Bk[~np.isfinite(dphi_Bk)] = 0
+            dphi_ckl = -(dphi_Ak + dphi_Bk)
+
+            # Add the contribution from log-barrier derivatives
+            d_Ak -= log_barrier*dphi_Ak.sum(axis=1)
+            d_Bk -= log_barrier*dphi_Bk.sum(axis=0)
+            d_ckl -= dphi_ckl
+        
         
         # Stop condition: sufficiently small gradient
         grad_normsq = (d_Ak**2).sum() + (d_Bk**2).sum() + (d_ckl**2).sum()
@@ -644,7 +716,9 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
             temp_cij[temp_cij < 0] = 0
             
             # Backtracking line search
-            if myObjFun(counts, temp_Ai, temp_Bj, temp_cij) > current_ObjFun - 0.01*step*grad_normsq:
+            if (MultinomialObjFun(counts, temp_Ai, temp_Bj, temp_cij,
+                                  log_barrier=log_barrier, t_prime=t_prime) >
+                current_ObjFun - 0.01*step*grad_normsq):
                 step *= 0.8
             else:
                 # Increment
@@ -653,9 +727,12 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
                 cij = temp_cij
                 break
 
+        # Force non-complex condition
+        cij[non_complex_indicator==1] = 0
+        
         # Update convergence information
         convergence_info['step'].append(step)
-        new_ObjFun = myObjFun(counts, Ai, Bj, cij)
+        new_ObjFun = MultinomialObjFun(counts, Ai, Bj, cij, log_barrier=log_barrier, t_prime=t_prime)
         convergence_info['ObjFun'].append(new_ObjFun)
         
         # Stop condition: negative loglikehood function converges
@@ -677,5 +754,405 @@ def myGradientDescent(data, non_complex=[], nIter=100, step0=10,
         convergence_info['ObjFun'] = [np.nan]
         convergence_info['step'] = [np.nan]
     
+    return {'Ai':Ai, 'Bj':Bj, 'cij':cij, 'convergence_info':pd.DataFrame(convergence_info),
+            'd_Ak':d_Ak, 'd_Bk':d_Bk, 'd_ckl':d_ckl}
+
+def BarrierSolver(data, log_barrier, t_prime0=2, mu=10,
+                  non_complex=[],
+                  nIter=100, step0=10, tol=1e-6, sep=':'):
+    '''
+    Solve the optimization problem with inequality constraint using the barrier
+    method.
+    
+    Parameters
+    ----------
+    data : pandas series
+        Array storing the PLA products count of a single cell, ordered by probe
+        A target, then probe B target (ie, [1:1, 1:2, 1:3,..., 3:1, 3:2, 3:3,...]).
+    log_barrier : float
+        The value of gamma used in the log barrier function. If None, the log
+        barrier is not applied to the objective function.
+    t_prime0 : int or float, optional
+        The starting value of t prime.
+        Default is 2.
+    mu: int or float, optional
+        The increment factor for t prime.
+        Default is 10.
+    non_complex : list, optional
+        List of PLA products or proteins that do no form protein complexes.
+        Example: X:Y means X:Y does not form a complex, while X means X does
+        not form complexes with any other proteins.
+        Default is [].
+    nIter : int, optional
+        The number of maximum iterations to perform during the centering step.
+        Default is 100.
+    step0 : float, optional
+        Initial step size for GDSolver during the centering step.
+        Default is 10.
+    tol: float, optional
+        The tolerance (duality gap) for stopping the outer iterations.
+        Default is 1e-6.
+    sep : string, optional
+        The separator convention in the names of PLA complexes.
+        Default is ':'.
+
+    Returns
+    -------
+    A dictionary containing the following data:
+    Ai : 1D numpy array
+        Array of current estimated abundance of all probes A, where i-th element
+        is the estimated abundance of probe Ai.
+    Bj : 1D numpy array
+        Array of current estimated abundance of all probes B.
+    cij : 2D numpy array
+        Array of estimated complex abundance of a single cell, where element ij
+        is the count of complex i:j.
+    convergence_info : pandas data frame
+        Return the convergence values for the algorithm at each iteration,
+        including the objective function's value, the norm of the gradient,
+        and the step size.
+        
+    '''
+    
+    # Calculate m, the number of inequalities
+    i_targets_all = [s.split(sep)[0] for s in data.index]
+    j_targets_all = [s.split(sep)[1] for s in data.index]
+    i_targets = np.sort(np.array(list(set(i_targets_all))))
+    j_targets = np.sort(np.array(list(set(j_targets_all))))
+    m = 2*len(i_targets)*len(j_targets)
+    
+    # Sort data frame by index alphabetically
+    data = data[[f"{i}{sep}{j}" for i in i_targets for j in j_targets]]
+    
+    # Initialize values of Ai, Bj and cij
+    counts = data.to_numpy().reshape((len(i_targets), len(j_targets)))
+    Ai = counts.sum(axis=1)
+    Bj = counts.sum(axis=0)
+    cij = np.zeros(counts.shape)
+        
+    # Dictionary to store convergence info
+    convergence_info = {'t_prime':[], 'inner_nIter':[], 'ObjFun':[], 'gradnorm':[]}
+    
+    # Outer iteration
+    t_prime = t_prime0
+    while m/t_prime >= tol:
+        
+        # Centering step
+        temp_out = GDSolver(data, Ai0=Ai, Bj0=Bj, cij0=cij,
+                            log_barrier=log_barrier, t_prime=t_prime,
+                            nIter=nIter, step0=step0)
+        Ai = temp_out['Ai'].to_numpy().reshape((-1,))
+        Bj = temp_out['Bj'].to_numpy().reshape((-1,))
+        cij = temp_out['cij'].to_numpy()
+        
+        # Update convergence info
+        convergence_info['t_prime'].append(t_prime)
+        convergence_info['inner_nIter'].append(temp_out['convergence_info'].shape[0])
+        convergence_info['ObjFun'].append(temp_out['convergence_info']['ObjFun'].iloc[-1])
+        convergence_info['gradnorm'].append(temp_out['convergence_info']['gradnorm'].iloc[-1])
+        
+        # Update t prime
+        t_prime *= mu
+    
+    # Create dataframe of probes A and B abundance, and complex abundance
+    Ai = pd.DataFrame(Ai, index=i_targets, columns=['Ai'])
+    Bj = pd.DataFrame(Bj, index=j_targets, columns=['Bj'])
+    cij = pd.DataFrame(cij, index=i_targets, columns=j_targets)
+    
+    return {'Ai':Ai, 'Bj':Bj, 'cij':cij,
+            'convergence_info':pd.DataFrame(convergence_info)}
+
+# =============================================================================
+# # Function to estimate probe abundance and complex abundance using the two-part model
+# =============================================================================
+def TwopartObjFun(counts, Ai, Bj, cij, p=(50/10000)**2):
+    '''
+    Calculate the objective function of the two-part model
+
+    Parameters
+    ----------
+    counts : 2D numpy array
+        Array of PLA product count of a single cell, where element ij is the
+        count of PLA product i:j.
+    Ai : 1D numpy array
+        Array of current estimated abundance of all probes A, where i-th element
+        is the estimated abundance of probe Ai.
+    Bj : 1D numpy array
+        Array of current estimated abundance of all probes B.
+    cij : 2D numpy array
+        Array of estimated complex abundance of a single cell, where element ij
+        is the count of complex i:j.
+    p: float, optional
+        The probabability of forming a PLA product due to background ligation.
+        Default is 2D case for ligation distance=50 nm, cell diameter=10um.
+
+    Returns
+    -------
+    The value of the least-square objective function.
+
+    '''
+        
+    B_grid, A_grid = np.meshgrid(Bj, Ai)
+    
+    out = 1/2*((counts - p*A_grid*B_grid - cij)**2)
+
+    return np.nansum(out)
+
+def GDSolver2(data, non_complex=[],
+             Ai0=None, Bj0=None, cij0=None, p=(50/10000)**2,
+             form='full', ini0=100, reduced_whitelist=[],
+             nIter=100, step0=10, reduced_step0=200,
+             tol1=1e-3, tol2=1e-3, tol3=1e-3, sep=':'):
+    '''
+    Use projected gradient descent to minimize the two-part objective function.
+
+    data : pandas series
+        Array storing the PLA products count of a single cell, ordered by probe
+        A target, then probe B target (ie, [1:1, 1:2, 1:3,..., 3:1, 3:2, 3:3,...]).
+    non_complex : list, optional
+        List of PLA products or proteins that do no form protein complexes.
+        Example: X:Y means X:Y does not form a complex, while X means X does
+        not form complexes with any other proteins.
+        Default is [].
+    Ai0 : numpy array, optional
+        Starting values for probe A abundance Ai. If None, set all values to 0.
+        Default is None.
+    Bj0 : numpy array, optional
+        Starting values for probe B abundance Bj. If None, set all values to 0.
+        Default is None.
+    cij0 : numpy array, optional
+        Starting values for complex abundance cij. If None, set all values to 0.
+        Default is None.
+    p: float, optional
+        The probabability of forming a PLA product due to background ligation.
+        Default is 2D case for ligation distance=50 nm, cell diameter=10um.
+    form: string, optional
+        The form of the optimization problem to be soved. If 'full', solve the
+        full optimization problem. If 'reduced', solve the reduced problem, in
+        which c_ij is set to 0.
+        Default is 'full'.
+    ini0: int or float, optional
+        The value used to initialize Ai and Bj for solving the reduced form.
+        Default is 100.
+    reduced_whitelist: list, optional
+        The list of PLA products that the reduced problem will solve for to initialize
+        Ai and Bj for the full problem.
+        Default is [].
+    nIter : int, optional
+        The number of maximum iterations to perform.
+        Default is 100.
+    step0 : float, optional
+        Initial step size for gradient descent.
+        Default is 10.
+    reduced_step0 : float, optional
+        Initial step size for gradient descent when solving the reduced problem
+        to initialize for the full problem.
+        Default is 200.
+    tol1 : float, optional
+        Convergence condition 1: if the gradient's norm is below this value,
+        convergence is reached.
+        Default is 1e-3.
+    tol2 : float, optional
+        Convergence condition 2: if the change in negative log-likelihood
+        function is below this value, convergence is reached.
+        Default is 1e-3.
+    tol3 : float, optional
+        Convergence condition 3: if the percentage change in negative
+        log-likelihood function is below this value, convergence is reached.
+        Default is 1e-3.
+    sep : string, optional
+        The separator convention in the names of PLA complexes.
+        Default is ':'.
+
+    Returns
+    -------
+    A dictionary containing the following data:
+    Ai : 1D numpy array
+        Array of current estimated abundance of all probes A, where i-th element
+        is the estimated abundance of probe Ai.
+    Bj : 1D numpy array
+        Array of current estimated abundance of all probes B.
+    cij : 2D numpy array
+        Array of estimated complex abundance of a single cell, where element ij
+        is the count of complex i:j.
+    convergence_info : pandas data frame
+        Return the convergence values for the algorithm at each iteration,
+        including the objective function's value, the norm of the gradient,
+        and the step size.
+    d_Ak : 1D array
+        Derivative of objective function w.r.t. Ak.
+    d_Bk : 1D array
+        Derivative of objective function w.r.t. Bk.
+    d_ckl : 1D array
+        Derivative of objective function w.r.t. ckl.
+    '''
+    
+    # Identity of antibody A and B of each PLA product
+    i_targets_all = [s.split(sep)[0] for s in data.index]
+    j_targets_all = [s.split(sep)[1] for s in data.index]
+    
+    # Get the array of unique probe targets
+    i_targets = np.sort(np.array(list(set(i_targets_all))))
+    j_targets = np.sort(np.array(list(set(j_targets_all))))
+    
+    # If the input data doesn't have exactly i*j PLA products, fill in the missing products with nan
+    temp_all_possible_products = [f"{i}{sep}{j}" for i in i_targets for j in j_targets]
+    for temp_row in [s for s in temp_all_possible_products if s not in data.index]:
+        reduced_data.at[temp_row] = np.nan
+      
+    # Sort data frame by index alphabetically
+    data = data[temp_all_possible_products]
+        
+    # When solving the reduced problem, replace all PLA products not in the
+    # reduced_whitelist with nan
+    reduced_data = data.copy() # for solving the reduced problem
+    if (form == 'reduced') and (reduced_whitelist):
+        reduced_data.loc[~reduced_data.index.isin(reduced_whitelist)] = np.nan
+    
+    # Counts data reshaped into non_complex's format
+    # rows are target of antibody A, columns are target of antibody B
+    counts = data.to_numpy().reshape((len(i_targets), len(j_targets)))
+        
+    
+    ###### Solve the reduced problem to initialize Ai and Bj for the full problem
+    if (form == 'full') and ((Ai0 is None) or (Bj0 is None)):
+        temp_ini = GDSolver2(data=reduced_data, non_complex=non_complex,
+                             Ai0=None, Bj0=None, cij0=None, p=p,
+                             form='reduced', ini0=ini0, reduced_whitelist=reduced_whitelist,
+                             nIter=1000, step0=reduced_step0, tol1=tol1, tol2=tol2, tol3=tol3, sep=sep)
+        if Ai0 is None:
+            Ai = temp_ini['Ai'].to_numpy().reshape((-1,))
+        if Bj0 is None:
+            Bj = temp_ini['Bj'].to_numpy().reshape((-1,))
+        if cij0 is None:
+            cij = np.zeros(counts.shape)
+        else:
+            cij = cij0
+    
+    ###### Initialize Ai and Bj for the reduced problem
+    elif form == 'reduced':
+        # Initializes Ak, Bk and ckl
+        if Ai0 is None:
+            Ai = np.zeros(i_targets.shape) + ini0
+            Ai[counts.sum(axis=1) == 0] = 0
+        else:
+            Ai = Ai0
+        if Bj0 is None:
+            Bj = np.zeros(j_targets.shape) + ini0
+            Bj[counts.sum(axis=0) == 0] = 0
+        else:
+            Bj = Bj0
+        if cij0 is None:
+            cij = np.zeros(counts.shape)
+        else:
+            cij = cij0
+        
+    else:
+        raise ValueError("Invalid form input.")
+        
+    
+    # Initialize the derivative w.r.t. c_kl and temp_cij (for form=='reduced')
+    d_ckl = np.zeros(counts.shape)
+    temp_cij = np.zeros(counts.shape)
+    
+    # Convert list of non-complex-forming products into a matrix of indicator: 1 = non-complex forming
+    # Same format as cij
+    non_complex_indicator = np.zeros(counts.shape)
+    if non_complex:  
+        for s in non_complex:
+            if sep in s:
+                i1, i2 = s.split(sep)
+                non_complex_indicator[i_targets==i1, j_targets==i2] = 1
+            else:
+                non_complex_indicator[i_targets==s,:] = 1
+                non_complex_indicator[:,j_targets==s] = 1
+
+    # A dictionary to store the value of negative log likelihood function after
+    # each iteration, the norm of the gradient, and the corresponding step size
+    convergence_info = {'ObjFun':[], 'gradnorm':[],'step':[]} 
+
+    # Gradient descent
+    # Projected gradient descent: handles positive bound constraint ()
+    
+    
+    for _ in range(nIter):
+        B_grid, A_grid = np.meshgrid(Bj, Ai)
+        temp_sum = (counts - p*A_grid * B_grid - cij) # calculate the term inside the sum
+
+        # Current negative log likelihood
+        current_ObjFun = TwopartObjFun(counts, Ai, Bj, cij, p=p)
+        
+        # Derivatives
+        d_Ak = -p*np.nansum(B_grid*temp_sum, axis=1)
+        d_Bk = -p*np.nansum(A_grid*temp_sum, axis=0)
+        if form == 'full':
+            d_ckl = -temp_sum
+        
+        # Stop condition: sufficiently small gradient
+        grad_normsq = np.nansum(d_Ak**2) + np.nansum(d_Bk**2) + np.nansum(d_ckl**2)
+        if np.sqrt(grad_normsq) < tol1:
+            break
+        
+        # Step size: backtracking line search (Convex optimization, B & V, algorithm 9.2)
+        # alpha = 0.01, beta = 0.8
+        step = step0
+        while True: # decrease step size
+            temp_Ai = Ai - step*d_Ak
+            temp_Bj = Bj - step*d_Bk
+            
+            # Projection
+            temp_Ai[temp_Ai < 0] = 0
+            temp_Bj[temp_Bj < 0] = 0
+            
+            # Update temp_cij only in form='full'
+            if form == 'full':
+                temp_cij = cij - step*d_ckl
+                temp_cij[temp_cij < 0] = 0
+            
+            # Backtracking line search
+            if (TwopartObjFun(counts, temp_Ai, temp_Bj, temp_cij, p=p)
+                > current_ObjFun - 0.01*step*grad_normsq):
+                step *= 0.8
+                if step < 0.01:
+                    break
+            else:
+                # Increment
+                Ai = temp_Ai
+                Bj = temp_Bj
+                cij = temp_cij
+                break
+            
+        # Force non-complex condition
+        cij[non_complex_indicator==1] = 0
+        
+        # Update convergence information
+        convergence_info['gradnorm'].append(np.sqrt(grad_normsq))
+        convergence_info['step'].append(step)
+        new_ObjFun = TwopartObjFun(counts, Ai, Bj, cij, p=p)
+        convergence_info['ObjFun'].append(new_ObjFun)
+        
+        # Stop condition: negative loglikehood function converges
+        if (abs(current_ObjFun - new_ObjFun) < tol2) or (abs(current_ObjFun - new_ObjFun)/current_ObjFun*100 < tol3):
+            break
+        
+    # Create dataframe of probes A and B abundance, and complex abundance
+    Ai = pd.DataFrame(Ai, index=i_targets, columns=['Ai'])
+    Bj = pd.DataFrame(Bj, index=j_targets, columns=['Bj'])
+    cij = pd.DataFrame(cij, index=i_targets, columns=j_targets)
+    
+    # Create dataframes of derivatives
+    d_Ak = pd.DataFrame(d_Ak, index=i_targets, columns=['d_Ak'])
+    d_Bk = pd.DataFrame(d_Bk, index=j_targets, columns=['d_Bk'])
+    d_ckl = pd.DataFrame(d_ckl, index=i_targets, columns=j_targets)
+    
+    # For rare cases where all PLA products are forced to be non-complex
+    if (not convergence_info['ObjFun']) or (not convergence_info['step']):
+        convergence_info['ObjFun'] = [np.nan]
+        convergence_info['step'] = [np.nan]
+    
+    # Display some information about convergence
+    print(f"{form} problem: converge after {len(convergence_info['step'])} steps.")
+    
+    # return temp_ini
     return {'Ai':Ai, 'Bj':Bj, 'cij':cij, 'convergence_info':pd.DataFrame(convergence_info),
             'd_Ak':d_Ak, 'd_Bk':d_Bk, 'd_ckl':d_ckl}
