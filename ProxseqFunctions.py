@@ -915,10 +915,14 @@ def GDSolver2(data, non_complex=[],
         not form complexes with any other proteins.
         Default is [].
     Ai0 : numpy array, optional
-        Starting values for probe A abundance Ai. If None, set all values to 0.
+        Starting values for probe A abundance Ai. The values must be arranged
+        alphabetically by target names.
+        If None, set all values to 0.
         Default is None.
     Bj0 : numpy array, optional
-        Starting values for probe B abundance Bj. If None, set all values to 0.
+        Starting values for probe B abundance Bj. The values must be arranged
+        alphabetically by target names.
+        If None, set all values to 0.
         Default is None.
     cij0 : numpy array, optional
         Starting values for complex abundance cij. If None, set all values to 0.
@@ -998,32 +1002,31 @@ def GDSolver2(data, non_complex=[],
     # If the input data doesn't have exactly i*j PLA products, fill in the missing products with nan
     temp_all_possible_products = [f"{i}{sep}{j}" for i in i_targets for j in j_targets]
     for temp_row in [s for s in temp_all_possible_products if s not in data.index]:
-        reduced_data.at[temp_row] = np.nan
+        data.at[temp_row] = np.nan
       
     # Sort data frame by index alphabetically
-    data = data[temp_all_possible_products]
-        
-    # When solving the reduced problem, replace all PLA products not in the
-    # reduced_whitelist with nan
-    reduced_data = data.copy() # for solving the reduced problem
-    if (form == 'reduced') and (reduced_whitelist):
-        reduced_data.loc[~reduced_data.index.isin(reduced_whitelist)] = np.nan
+    data = data.loc[temp_all_possible_products]
     
     # Counts data reshaped into non_complex's format
     # rows are target of antibody A, columns are target of antibody B
-    counts = data.to_numpy().reshape((len(i_targets), len(j_targets)))
-        
+    counts = data.to_numpy().reshape((len(i_targets), len(j_targets)))   
     
     ###### Solve the reduced problem to initialize Ai and Bj for the full problem
-    if (form == 'full') and ((Ai0 is None) or (Bj0 is None)):
-        temp_ini = GDSolver2(data=reduced_data, non_complex=non_complex,
-                             Ai0=None, Bj0=None, cij0=None, p=p,
-                             form='reduced', ini0=ini0, reduced_whitelist=reduced_whitelist,
-                             nIter=1000, step0=reduced_step0, tol1=tol1, tol2=tol2, tol3=tol3, sep=sep)
-        if Ai0 is None:
-            Ai = temp_ini['Ai'].to_numpy().reshape((-1,))
-        if Bj0 is None:
-            Bj = temp_ini['Bj'].to_numpy().reshape((-1,))
+    if (form == 'full'):
+        if ((Ai0 is None) or (Bj0 is None)):
+            temp_ini = GDSolver2(data=data, non_complex=non_complex,
+                                 Ai0=None, Bj0=None, cij0=None, p=p,
+                                 form='reduced', ini0=ini0, nIter=nIter*2, step0=reduced_step0,
+                                 tol1=tol1, tol2=tol2, tol3=tol3, sep=sep)
+            if Ai0 is None:
+                Ai = temp_ini['Ai'].to_numpy().reshape((-1,))
+            if Bj0 is None:
+                Bj = temp_ini['Bj'].to_numpy().reshape((-1,))
+        
+        else:
+            Ai = Ai0
+            Bj = Bj0
+        
         if cij0 is None:
             cij = np.zeros(counts.shape)
         else:
