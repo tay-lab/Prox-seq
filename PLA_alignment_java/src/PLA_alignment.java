@@ -291,7 +291,7 @@ public class PLA_alignment
 						{							
 							// Locate the connector using Levenshtein distance, max allowed distance is 3
 							// Does not need to take into account N, since the connector region doesn't usually contain N
-							int[] connector_shift = new int[] {0, -1, 1};
+							int[] connector_shift = new int[] {0, -1, 1}; // allows 1-base shift
 							boolean match_connector = false; // true if matching connector is found
 							
 							int connector_distance = 2; // lowest Levenshtein distance found between the true connector and the test connector sequence
@@ -449,7 +449,7 @@ public class PLA_alignment
 		 * 		^^^^^^^^^^ if 1 < DOWNSAMPLE, it is the number of reads to retain (10,000 = use the first 10,000 reads)
 		 * 		SEED: integer seed number for random downsampling or bootstrap (default = 1)
 		 * 
-		 * Output format: cell barcodes, UMI , AB1 ID , AB2 ID
+		 * Output format: cell barcodes,UMI,AB1 ID,AB2 ID
 		 * 
 		 * The summary file also contains the found AB barcode and their read counts (only keep those with read counts >= 100)
 		 * NOTE: actual seed number for random downsampling is actually SEED + DOWNSAMPLE*1000, so that different downsample ratios don't use the same seed number even though the SEED values are equal
@@ -612,13 +612,14 @@ public class PLA_alignment
 						
 						// Locate the connector using Levenshtein distance, max allowed distance is 2
 						// Does not need to take into account N, since the connector region doesn't usually contain N
-						int[] connector_shift = new int[] {0, -1, 1, -2, 2, -3, 3}; // only allow up to 3-base shift of the expected starting location
+						int[] connector_shift = new int[] {0, -1, 1}; // only allow up to 1-base shift of the expected starting location
 						boolean match_connector = false; // true if matching connector is found
-						int connector_distance = 3; // lowest Levenshtein distance found between the true connector and the test connector sequence
+						int connector_distance = 3; // lowest Levenshtein distance found between the true connector and the test connector sequence, will be updated during the for loop
 						for (int shift_i : connector_shift)
 						{
 							int temp_distance = LevenshteinDistance.getDefaultInstance().apply(line1.substring(connector_start+shift_i, connector_start+shift_i+connector.length()), connector);
 							if ((temp_distance <= 2) && (temp_distance < connector_distance))
+								// match within 2 Levenshtein distance, and only if the temp_distance is lower than previous iterations
 							{
 								connector_distance = temp_distance;
 								connector_start_temp = connector_start + shift_i;
@@ -1607,6 +1608,10 @@ public class PLA_alignment
 		 * Input arguments:
 		 * 		I: path to aligned/cell barcode-corrected file (txt.gz format)
 		 * 		O: path to output multi-mapping UMIs (tab-separated, txt.gz format)
+		 * 
+		 * Output:
+		 * 		Each row contains: cell barcode_UMI [PLA product 1, PLA product 2, ...]
+		 * 		PLA product 1, 2, ... all have the same cell barcode and UMI
 		 */
 		
 		case "CheckUMIMapping":
@@ -2243,6 +2248,176 @@ public class PLA_alignment
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
 						
+			break;
+		}
+		
+		
+		/*
+		 * Temporary function for debugging
+		 * Output reads that have AB2 = CTACGACA
+		 */
+		case "TempDebug":
+		{
+			
+			// Parse the arguments
+			String R1 = "", O = "";
+			for (int i=1; i<args.length; i++)
+			{
+				String[] j = args[i].split("=");
+				
+				if (j.length < 2) {throw new java.lang.IllegalArgumentException("Whitespaces are not allowed between argument key specifier and the argument!");}
+				
+				switch (j[0])
+				{
+				case "R1": R1 = j[1]; break;
+				case "O": O = j[1]; break;
+				default: throw new java.lang.IllegalArgumentException("ReadAlignmentSmartSeq: Invalid argument key specifier!");
+				}
+			}
+		
+			try (
+					BufferedReader br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1)))); // read1
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
+				 )
+			{
+			
+				// Read the AB look up table into an array
+				String AB2_target = "CTACGACA";
+					
+				/**
+				 * Process read 1
+				 * Read 1 contains PLA products
+				 * UMI region: 2nd base to 17th base (16-base long)
+				 * Output format: <cell barcode> , <UMI> , <AB1 ID> , <AB2 ID>
+				 * Cell barcode is equal to sample barcode
+				 */
+
+				// Set up the counters for the summary files
+				int counter = 0; // line number counter
+				
+				// Set up for alignment
+				String line1;
+				String connector = "TCGTGTCGTGTCGTGTCTAAAG"; // connector sequence
+				
+				// If using downsample with a specific number of reads, get the number of reads first
+//				List<Integer> downsample_read = new ArrayList<Integer>();
+//				int temp_counter = 0;
+//				while ((line1=br1.readLine()) != null)
+//				{
+//					downsample_read.add(temp_counter);
+//					temp_counter++;
+//				}
+//				br1.close();
+//				br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1)))); // read1
+				
+				// Start reading
+				long my_timer = System.currentTimeMillis();
+				System.out.printf("%s   Start alignment%n", LocalDateTime.now().format(time_formatter));
+				
+				while ((line1=br1.readLine()) != null)
+				{
+							
+					if ((counter % 4) == 1)
+					{
+
+						// Check if the UMI region has an excessive amount of A
+						if (StringUtils.countMatches(line1.substring(1, 17), "A") >= 10)
+						{
+							if ((((counter-1)/4+1) % 1_000_000) == 0)
+							{
+								System.out.printf("%s   ReadAlignmentSmartSeq   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+										LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
+								my_timer = System.currentTimeMillis();
+							}
+							
+							counter++;
+							continue;
+						}
+						
+						int connector_start = 39; // expected starting location of connector is at index 39 (base 40th)
+						int connector_start_temp = 39; // temporary starting location of connector, for used in for loop
+						
+						// Locate the connector using Levenshtein distance, max allowed distance is 2
+						// Does not need to take into account N, since the connector region doesn't usually contain N
+						int[] connector_shift = new int[] {0, -1, 1}; // only allow up to 1-base shift of the expected starting location
+						boolean match_connector = false; // true if matching connector is found
+						int connector_distance = 3; // lowest Levenshtein distance found between the true connector and the test connector sequence
+						for (int shift_i : connector_shift)
+						{
+							int temp_distance = LevenshteinDistance.getDefaultInstance().apply(line1.substring(connector_start+shift_i, connector_start+shift_i+connector.length()), connector);
+							if ((temp_distance <= 2) && (temp_distance < connector_distance))
+							{
+								connector_distance = temp_distance;
+								connector_start_temp = connector_start + shift_i;
+								match_connector = true;
+								
+								if (temp_distance == 0)
+								{ break; }
+							}
+						}
+						connector_start = connector_start_temp;
+						
+						if (match_connector)
+						{
+							
+							
+							// Check if there is a frameshift, in order to locate AB2 correctly
+							// Find the location of TAAAG in the found connector region
+							int shift_j = line1.substring(connector_start, connector_start+connector.length()+2).indexOf("TAAAG"); // add 2 just in case there are 2 insertions
+							if (shift_j == -1) // skip read if can't find TAAAG in the connector region
+							{
+								counter++;
+								continue;
+							}
+							shift_j = 17 - shift_j; // number of bases to shift to the left
+							
+							// Found AB barcodes
+							String AB2_found = "";
+							if ((connector_start+25-shift_j+8) <= line1.length()) // check if the read fully contains the AB2 ID
+							{
+								AB2_found = line1.substring(connector_start+25-shift_j, connector_start+25-shift_j+8);
+							}
+							else if ((connector_start+25-shift_j+8) == (line1.length()+1)) // the first 7 bases of the barcode is at the end of the read (in other words, some insertions)
+							{
+								AB2_found = line1.substring(connector_start+25-shift_j) + "N";
+							}
+							else // skip read if there are too many insertions
+							{
+								counter++;
+								continue;
+							}
+							
+							
+							// Check if AB2_found matches with AB2_target, allowing at most 1 N
+							if ((StringUtils.countMatches(AB2_found, "N") <= 1) && (HammingDistanceCalculator(AB2_found, AB2_target, true) <= 1))
+							{
+								bwout.write(line1);
+								bwout.newLine();
+							}
+						}
+						
+						counter++;
+						
+						
+						if ((((counter-1)/4+1) % 1_000_000) == 0)
+						{
+							System.out.printf("%s   ReadAlignmentSmartSeq   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+									LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
+							my_timer = System.currentTimeMillis();
+						}
+					}
+					else
+					{
+						counter++;
+					}
+				
+				}
+				
+				
+				System.out.printf("%s   ReadAlignmentSmartSeq   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), (counter+1)/4);
+				System.out.println();
+				
+			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
 			break;
 		}
 		

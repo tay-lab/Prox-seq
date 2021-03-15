@@ -107,10 +107,13 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     
     Returns
     -------
+    (dge, dge_complex_true, dge_ns_true)
     dge : pandas data frame
         The simulated PLA count data.
-    dge_actual_complexes : pandas data frame
-        The simulated complex abundance.
+    dge_complex_true : pandas data frame
+        The true complex abundance.
+    dge_ns_true : pandas data frame
+        The true abundance of non-complex forming probes.
         
     '''
 
@@ -128,17 +131,17 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     dge = {}
     # Look up dictionary: key is the complex identity, value is its index (or row number in dge matrix)
     complex_ind = {f'{i}{sep}{j}':(i*NB_targets+j) for i in range(NA_targets) for j in range(NB_targets)}
+    
 
     # Index matrix: to track the identity of each probe A and B
     probeA_ind = np.array([s.split(sep)[0] for s in complex_ind.keys()]) # element ij = i (ie, target of probe A)
     probeB_ind = np.array([s.split(sep)[1] for s in complex_ind.keys()]) # element ij = j (ie, target of probe B)
 
-    # Convert list to numpy array
-    probeA_ns = np.array(probeA_ns)
-    probeB_ns = np.array(probeB_ns)
-
-    # Dictionary to store scaled complex amount of each single cell
-    dge_actual_complexes = {}
+    # Data frame to store actual complex abundance of each single cell
+    dge_complex_true = {}
+    
+    # Data frame to store actual non-complexing forming probe abundance of each single cell
+    dge_ns_true = {}
 
     # Start simulation
     # Iterate through each single cell
@@ -158,8 +161,11 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
             probeA_ns_i = copy.deepcopy(probeA_ns).astype(int)
             probeB_ns_i = copy.deepcopy(probeB_ns).astype(int)
 
-        # Save the actual complex amount
-        dge_actual_complexes[cell_i] = num_complex_i.reshape(-1,)
+        # Save the true complex abundance
+        dge_complex_true[cell_i] = num_complex_i.reshape(-1,)
+        
+        # Save the true non-complex forming abundance
+        dge_ns_true[cell_i] = np.hstack((probeA_ns_i, probeB_ns_i))
 
         # Randomly distribute the protein complexes
         if mode == '2D':
@@ -232,14 +238,57 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
 
     # Convert dictionary to pandas data frame
     complex_ind_new = [f'{i+1}{sep}{j+1}' for i in range(NA_targets) for j in range(NB_targets)] # update protein id from 0 to 1, 1 to 2, etc.
-    dge = pd.DataFrame(dge, index=complex_ind_new)
-    dge_actual_complexes = pd.DataFrame(dge_actual_complexes, index=complex_ind_new)
-    return (dge, dge_actual_complexes)
+    return (pd.DataFrame(dge, index=complex_ind_new),
+            pd.DataFrame(dge_complex_true, index=complex_ind_new),
+            pd.DataFrame(dge_ns_true, index=[f"{i+1}_A" for i in range(NA_targets)]+[f"{i+1}_B" for i in range(NB_targets)]))
+
 
 # =============================================================================
-# # Function to calculate the probe abundance
-# # Ei,j = (Xi,. + X.,j)/(X.,.)
-# # where Xi,. means sum of Xi,j over all j
+# # Function to calculate the total protein abundance
+# # Homodimers result in twice the count for the protein
+# =============================================================================
+def calculateProteinAbundance(data, sep=':'):
+    '''
+    Calculate protein abundance by summing the counts of each target, regardless of probe A or B.
+    
+
+    Parameters
+    ----------
+    data : pandas data frame
+        Columns are cell barcodes, rows are PLA products
+    sep : string, optional
+        The separator format for PLA product.
+        Default is ':'.
+
+    Returns
+    -------
+    Returns a pandas data frame.
+    Each row is the total abundance of proteins 1, 2,...
+
+    '''
+    
+    # Get AB1 and AB2 of each row of data
+    AB1 = np.array([s.split(sep)[0] for s in data.index])
+    AB2 = np.array([s.split(sep)[1] for s in data.index])
+    
+    # Get the unique antibody targets
+    AB_unique = list(set(np.concatenate((AB1,AB2))))
+    AB_unique.sort()
+    
+    # Initialize output dataframes
+    output = pd.DataFrame(0, index=AB_unique, columns=data.columns)
+    
+    for i in output.index:
+        output.loc[i,:] = data.loc[(AB1==i) | (AB2==i),:].sum(axis=0)
+        # Add homodimer counts once more
+        if f"{i}{sep}{i}" in data.index:
+            output.loc[i,:]  = output.loc[i,:] + data.loc[f"{i}{sep}{i}",:]
+    
+    return output
+
+
+# =============================================================================
+# # Function to calculate the probe A and B abundance
 # =============================================================================
 def calculateProbeAbundance(data, sep=':'):
     '''
@@ -248,7 +297,7 @@ def calculateProbeAbundance(data, sep=':'):
     Parameters
     ----------
     data : pandas data frame
-        DESCRIPTION.
+        Columns are cell barcodes, rows are PLA products
     sep : string, optional
         The separator format for PLA product.
         Default is ':'.
@@ -365,7 +414,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
     tol : float
         If the change in solution between current and last iteration is below
         this value, convergence is reached.
-    sep : string
+    sep : string, optional
         The separator convention in the names of PLA complexes.
         Default is ':'.
 
@@ -452,6 +501,47 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
 
     print(f"estimateComplexes done: Loop number {loop_num}, tolerance {max_change:.2f}")
     return pd.DataFrame(data=dge_out, index=data.index, columns=data.columns)
+
+# =============================================================================
+# # Function to estimate complex abundance, using non-complex forming probe A and B
+# # Suppose probe Ak and Bl do not form any complex
+# # The expected count of non-complex PLA product i:j is
+# #             Eij = Xil*Xkj/Xkl
+# #     where Xij is the observed count of PLA product i:j
+# # The complex abundance of i:j is Xij - Eij
+# =============================================================================
+def estimateComplexes2(data, refA, refB, sep=':'):
+    '''
+    Estimate complex abundance by using non-complex forming probes
+
+    Parameters
+    ----------
+    data : pandas data frame
+        Input digital PLA expression matrix (PLA products x single cells).
+    refA : list
+        List of reference non-complex forming probe A
+    refB : list
+        List of reference non-complex forming probe B
+    sep : string, optional
+        The separator convention in the names of PLA complexes.
+        Default is ':'.
+
+    Returns
+    -------
+    A data frame with the same shape as df, containing estimated complex abundance
+
+    '''
+    out = pd.DataFrame(0, index=data.index, columns=data.columns)
+    
+    for i in out.index:
+        AB1, AB2 = i.split(sep)
+        if (AB1 == refA[0]) or (AB2 == refB[0]):
+            continue
+        
+        out.loc[i,:] = data.loc[i,:] - data.loc[f"{AB1}{sep}{refB[0]}",:]*data.loc[f"{refA[0]}{sep}{AB2}",:]/data.loc[f"{refA[0]}{sep}{refB[0]}",:]
+    
+    return out
+    
 
 # =============================================================================
 # # Function to estimate probe abundance and complex abundance using the multinomial model
