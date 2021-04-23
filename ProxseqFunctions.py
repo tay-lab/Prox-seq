@@ -272,17 +272,18 @@ def calculateProteinAbundance(data, sep=':'):
     AB2 = np.array([s.split(sep)[1] for s in data.index])
     
     # Get the unique antibody targets
-    AB_unique = list(set(np.concatenate((AB1,AB2))))
+    AB_unique = np.unique(np.concatenate((AB1,AB2)))
     AB_unique.sort()
     
     # Initialize output dataframes
     output = pd.DataFrame(0, index=AB_unique, columns=data.columns)
     
     for i in output.index:
-        output.loc[i,:] = data.loc[(AB1==i) | (AB2==i),:].sum(axis=0)
-        # Add homodimer counts once more
-        if f"{i}{sep}{i}" in data.index:
-            output.loc[i,:]  = output.loc[i,:] + data.loc[f"{i}{sep}{i}",:]
+        output.loc[i,:] = (data.loc[AB1==i,:]).sum(axis=0) + (data.loc[AB2==i,:]).sum(axis=0)
+        # output.loc[i,:] = data.loc[(AB1==i) | (AB2==i),:].sum(axis=0)
+        # # Add homodimer counts once more
+        # if f"{i}{sep}{i}" in data.index:
+        #     output.loc[i,:]  = output.loc[i,:] + data.loc[f"{i}{sep}{i}",:]
     
     return output
 
@@ -327,8 +328,8 @@ def calculateProbeAbundance(data, sep=':'):
         output1.loc[i,:] = data.loc[AB1==i,:].sum(axis=0)
     for i in output2.index:
         output2.loc[i,:] = data.loc[AB2==i,:].sum(axis=0)
-    output1.index = [f"{i}_1" for i in output1.index]
-    output2.index = [f"{i}_2" for i in output2.index]
+    output1.index = [f"{i}_A" for i in output1.index]
+    output2.index = [f"{i}_B" for i in output2.index]
     
     return pd.concat([output1,output2])
 
