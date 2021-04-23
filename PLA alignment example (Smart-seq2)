@@ -1,40 +1,22 @@
-# Below is an example of alignment process for PLA products, obtained from Smart-seq2 pipeline
-# All read 1 files are contained in a folder $my_dir (this folder CANNOT contain any files other than the read 1 files)
-# Each read 1 file is a single cell
+# Below is an example of alignment process for PLA products, obtained from plate-based Prox-seq pipeline
+# ReadAlignmentSmartSeq takes input R1List, which contains a csv file of single cell fastq files and the cell id
+#           file_path,cell_id
 # barcode_cocktail_5.2_2.csv: a csv file containing protein names and their DNA barcodes in columns 1 and 2, respectivelly
 
-# Loop over all files in the directory
-for filepath in $my_dir/*R1_001.fastq.gz; do
-
-  # Set up the file name (ie, extract the fastq.gz file name from the $filepath)
-  filename=$(cut -d "/" -f 8 <<< $filepath)
-
-  # Alignment
-  temp_out1=${filename/_R1_001.fastq.gz/_aligned.txt.gz}
-  temp_sum1=${temp_out1/.txt.gz/_summary.txt}
-  java -jar $my_dir/PLA_alignment.jar ReadAlignmentSmartSeq \
-  R1=$filepath \
-  ABfile=$my_dir/barcode_cocktail_5.2_2.csv \
-  O=$my_dir/Alignments_separate/$temp_out1 \
-  SUMMARY=$my_dir/Alignments_separate_summary/$temp_sum1 \
-  HEADER=TRUE
-
-  # UMI merging
-  temp_out2=${temp_out1/.txt.gz/_UMIMerged_separate.txt.gz}
-  temp_sum2=${temp_out2/.txt.gz/_summary.txt}
-  java -jar $my_dir/PLA_alignment.jar UMIMerging \
-  I=$my_dir/Alignments_separate/$temp_out1 \
-  O=$my_dir/UMIMerged_separate/$temp_out2 \
-  SUMMARY=$my_dir/UMIMerged_separate_summary/$temp_sum2
-
-done
+# Read alignment: output is a single txt.gz file containing all single cells and their PLA products
+java -jar /directory/path/PLA_alignment.jar ReadAlignmentSmartSeq \
+R1List=/directory/path/R1List.csv \
+O=/directory/path/ReadAlignmentSmartSeq_out.txt.gz \
+ABfile=/directory/path/NFKB_barcode_alignment.csv \
+SUMMARY=/directory/path/Alignment/ReadAlignmentSmartSeq_summary.txt \
+HEADER=TRUE
 
 # Digital count matrix
-java -jar $my_dir/PLA_alignment.jar DigitalCountSmartSeq \
-dirI=$my_dir/UMIMerged_separate \
-O=$my_dir/Smartseq2_PLA_dge.txt.gz \
-ABfile=$my_dir/barcode_cocktail_5.2_2.csv \
+java -jar /directory/path/PLA_alignment.jar DigitalCountSmartSeq \
+dirI=/directory/path/UMIMerged_separate \
+O=/directory/path/Smartseq2_PLA_dge.txt.gz \
+ABfile=/directory/path/barcode_cocktail_5.2_2.csv \
 HEADER=TRUE \
 REMOVE_DUPLICATE=TRUE \
 EXPORT_DUPLICATE=TRUE \
-SUMMARY=$my_dir/Smartseq2_PLA_export_summary.txt
+SUMMARY=/directory/path/count_export_summary.txt
