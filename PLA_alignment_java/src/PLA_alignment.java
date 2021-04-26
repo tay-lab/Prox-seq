@@ -544,10 +544,10 @@ public class PLA_alignment
 					{
 						// Set up the counters for each read 1 file for the summary file
 						int counter = 0; // line number counter in fastq file
-						int PLA_counter_temp = 0; // PLA product counter
-						int bad_connector_counter_temp = 0; // counter for reads with non-matching connector
-						int bad_UMI_counter_temp = 0; // counter of reads with bad UMI region
-						int non_matching_AB_counter_temp = 0; // counter of the number of reads with non-matching AB barcode
+//						int PLA_counter_temp = 0; // PLA product counter
+//						int bad_connector_counter_temp = 0; // counter for reads with non-matching connector
+//						int bad_UMI_counter_temp = 0; // counter of reads with bad UMI region
+//						int non_matching_AB_counter_temp = 0; // counter of the number of reads with non-matching AB barcode
 						
 						String line1; // current line in current read 1 file
 						while ((line1=br1.readLine()) != null)
@@ -569,7 +569,7 @@ public class PLA_alignment
 									
 									counter++;
 									bad_UMI_counter++;
-									bad_UMI_counter_temp++;
+//									bad_UMI_counter_temp++;
 									continue;
 								}
 								
@@ -615,7 +615,7 @@ public class PLA_alignment
 									{
 										counter++;
 										bad_connector_counter++;
-										bad_connector_counter_temp++;
+//										bad_connector_counter_temp++;
 										continue;
 									}
 									shift_j = 17 - shift_j; // number of bases to shift to the left
@@ -708,12 +708,12 @@ public class PLA_alignment
 											bwout.write(R1List_temp_array[1] + "," + line1.substring(1, 17) + "," + AB1_ID + "," + AB2_ID);
 											bwout.newLine();
 											PLA_counter++;
-											PLA_counter_temp++;
+//											PLA_counter_temp++;
 										}
 										else
 										{
 											non_matching_AB_counter++;
-											non_matching_AB_counter_temp++;
+//											non_matching_AB_counter_temp++;
 										}
 									}
 									
@@ -725,7 +725,7 @@ public class PLA_alignment
 								else
 								{
 									bad_connector_counter++;
-									bad_connector_counter_temp++;
+//									bad_connector_counter_temp++;
 								}
 								
 								
@@ -744,12 +744,12 @@ public class PLA_alignment
 							counter++;
 						}
 						
-						bwsum.write(R1List_temp_array[0]); bwsum.newLine();
-						bwsum.write("Number of reads with a valid PLA product: " + String.format("%,d", PLA_counter_temp)); bwsum.newLine();
-						bwsum.write("Number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter_temp)); bwsum.newLine();
-						bwsum.write("Number of reads discarded because of bad UMI: " + String.format("%,d",bad_UMI_counter_temp)); bwsum.newLine();
-						bwsum.write("Number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter_temp)); bwsum.newLine();
-						bwsum.newLine();
+//						bwsum.write(R1List_temp_array[0]); bwsum.newLine();
+//						bwsum.write("Number of reads with a valid PLA product: " + String.format("%,d", PLA_counter_temp)); bwsum.newLine();
+//						bwsum.write("Number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter_temp)); bwsum.newLine();
+//						bwsum.write("Number of reads discarded because of bad UMI: " + String.format("%,d",bad_UMI_counter_temp)); bwsum.newLine();
+//						bwsum.write("Number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter_temp)); bwsum.newLine();
+//						bwsum.newLine();
 						
 					} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths in R1List!");}
 					

@@ -57,8 +57,234 @@ def randomPointGen3D(n):
 # # Assume saturated antibody binding: all proteins and protein complexes are bound by PLA probes
 # # If a pair of PLA probes A and B are within a certain distance (ie, the ligation distance), they are ligated
 # # If more than one pair of probes are within the ligation distance, there are 2 options: all of them are ligated, or only one pair is
+#
+# # Cell variance: Poisson
 # =============================================================================
 def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
+                n_cells=100, ligation_efficiency=1, ligate_all=False,
+                cell_variance=False, mode='2D',
+                seed_num=None, sep=':'):
+    '''
+    A function to simulate PLA counts of a cocktail of N targets.
+    
+    Parameters
+    ----------
+    num_complex : numpy array 
+        An NA-by-NB array containing the number of complexes on each cell
+        (NA and NB is the number of targets of probe A and B), and element ij is
+        the abundance of complex i:j.
+    probeA_ns : numpy array
+        An NA-by-1 array containing the number of expressed proteins bound by
+        probe A (entry [i] is the abundance of non-complex forming protein i,
+                 bound by PLA probe A).
+    probeB_ns : numpy array
+        An NB-by-1 array containing the number of expressed proteins bound by
+        probe B (entry [j] is the abundance of non-complex forming protein j,
+                 bound by PLA probe B).
+    cell_d : float
+        The cell diameter in nanometer.
+        Default is 50.
+    PLA_dist : float
+        The ligation distance in nanometer.
+        Default is 10,000.
+    n_cells : int
+        The number of cells to simulate.
+    ligation_efficiency : float
+        The chance of a PLA pair being ligated (between 0 and 1).
+    ligate_all : boolean
+        Whether only 1 PLA pair or all pairs are allowed to be ligated.
+        Default is False
+    cell_variance : boolean
+        Whether to simulate variance due to cell size (log normal distribution).
+        Default is True
+    mode : string
+        '2D' (PLA probes are on cell surface, default) or '3D' (PLA probes are
+                                                                intracellular).
+    seed_num : float, optional
+        The seed number for RNG.
+        Default is None.
+    sep: string, optional
+        The separator format for PLA product.
+        Default is ':'.
+    
+    Returns
+    -------
+    (dge, dge_complex_true, dge_ns_true)
+    dge : pandas data frame
+        The simulated PLA count data.
+    dge_complex_true : pandas data frame
+        The true complex abundance.
+    dge_ns_true : pandas data frame
+        The true abundance of non-complex forming probes.
+        
+    '''
+
+    # Seed number
+    np.random.seed(seed_num)
+    random.seed(seed_num)
+
+    num_complex = np.array(num_complex)
+    
+    # Number of probe A and B targets
+    NA_targets = num_complex.shape[0]
+    NB_targets = num_complex.shape[1]
+
+    # Initialize dge dictionary
+    dge = {}
+    # Look up dictionary: key is the complex identity, value is its index (or row number in dge matrix)
+    complex_ind = {f'{i}{sep}{j}':(i*NB_targets+j) for i in range(NA_targets) for j in range(NB_targets)}
+    
+
+    # Index matrix: to track the identity of each probe A and B
+    probeA_ind = np.array([s.split(sep)[0] for s in complex_ind.keys()]) # element ij = i (ie, target of probe A)
+    probeB_ind = np.array([s.split(sep)[1] for s in complex_ind.keys()]) # element ij = j (ie, target of probe B)
+
+    # Data frame to store actual complex abundance of each single cell
+    dge_complex_true = {}
+    
+    # Data frame to store actual non-complexing forming probe abundance of each single cell
+    dge_ns_true = {}
+
+    # Cell variance: Poisson
+    # variance_probeA_ns = []
+    # variance_probeB_ns = []
+    # variance_complex = []
+    # if cell_variance:
+    #     for i in range(len(probeA_ns)):
+    #         variance_probeA_ns.append(np.random.poisson(probeA_ns[i], size=n_cells))
+    #     for i in range(len(probeB_ns)):
+    #         variance_probeB_ns.append(np.random.poisson(probeB_ns[i], size=n_cells))
+    #     for i in range(num_complex.shape[0]):
+    #         variance_complex.append([])
+    #         for j in range(num_complex.shape[1]):
+    #             variance_complex[i].append(np.random.poisson(num_complex[i,j], size=n_cells))
+    #     variance_probeA_ns = np.array(variance_probeA_ns)
+    #     variance_probeB_ns = np.array(variance_probeB_ns)
+    #     variance_complex = np.reshape(np.array(variance_complex),
+    #                                   (num_complex.shape[0],num_complex.shape[1],n_cells))
+    
+    # Cell variance: negative binomial: variance = 10*mean
+    variance_probeA_ns = []
+    variance_probeB_ns = []
+    variance_complex = []
+    temp_p = 1/10
+    if cell_variance:
+        for i in range(len(probeA_ns)):
+            variance_probeA_ns.append(np.random.negative_binomial(n=probeA_ns[i]*temp_p/(1-temp_p), p=temp_p, size=n_cells))
+        for i in range(len(probeB_ns)):
+            variance_probeB_ns.append(np.random.negative_binomial(n=probeB_ns[i]*temp_p/(1-temp_p), p=temp_p, size=n_cells))
+        for i in range(num_complex.shape[0]):
+            variance_complex.append([])
+            for j in range(num_complex.shape[1]):
+                if num_complex[i,j] == 0:
+                    variance_complex[i].append(np.zeros(n_cells).astype(int))
+                else:
+                    variance_complex[i].append(np.random.negative_binomial(n=num_complex[i,j]*temp_p/(1-temp_p), p=temp_p, size=n_cells))
+        variance_probeA_ns = np.array(variance_probeA_ns)
+        variance_probeB_ns = np.array(variance_probeB_ns)
+        variance_complex = np.reshape(np.array(variance_complex),
+                                      (num_complex.shape[0],num_complex.shape[1],n_cells))
+    
+    # Start simulation
+    # Iterate through each single cell
+    print(f'{datetime.datetime.now().replace(microsecond=0)}     Start simulation')
+    for cell_i in range(n_cells):
+
+        dge[cell_i] = np.zeros((NA_targets*NB_targets,))
+
+        # Add cell variance if required
+        if cell_variance:
+            probeA_ns_i = variance_probeA_ns[:,cell_i]
+            probeB_ns_i = variance_probeB_ns[:,cell_i]
+            num_complex_i = variance_complex[:,:,cell_i]
+        else:
+            num_complex_i = copy.deepcopy(num_complex).astype(int)
+            probeA_ns_i = copy.deepcopy(probeA_ns).astype(int)
+            probeB_ns_i = copy.deepcopy(probeB_ns).astype(int)
+
+        # Save the true complex abundance
+        dge_complex_true[cell_i] = num_complex_i.reshape(-1,)
+        
+        # Save the true non-complex forming abundance
+        dge_ns_true[cell_i] = np.hstack((probeA_ns_i, probeB_ns_i))
+
+        # Randomly distribute the protein complexes
+        if mode == '2D':
+            protein_target_i = cell_d/2*randomPointGen2D(num_complex_i.sum())
+        elif mode == '3D':
+            protein_target_i = cell_d/2*randomPointGen3D(num_complex_i.sum())
+
+        # Probe binding is assumed to be saturated, so all protein targets have probe A and probe B
+        probeA_i = copy.deepcopy(protein_target_i)
+        probeB_i = copy.deepcopy(protein_target_i)
+
+        # Probe A target
+        probeA_target = np.repeat(probeA_ind.flatten(), num_complex_i.flatten())
+        probeB_target = np.repeat(probeB_ind.flatten(), num_complex_i.flatten())
+
+        # Add non-specific binding
+        if probeA_ns.sum() > 0:
+            if mode == '2D':
+                probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen2D(probeA_ns_i.sum())))
+            elif mode == '3D':
+                probeA_i = np.vstack((probeA_i, cell_d/2*randomPointGen3D(probeA_ns_i.sum())))
+            probeA_target = np.concatenate((probeA_target, np.repeat(range(NA_targets),probeA_ns_i)))
+        if probeB_ns.sum() > 0:
+            if mode == '2D':
+                probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen2D(probeB_ns_i.sum())))
+            elif mode == '3D':
+                probeB_i = np.vstack((probeB_i, cell_d/2*randomPointGen3D(probeB_ns_i.sum())))
+            probeB_target = np.concatenate((probeB_target, np.repeat(range(NB_targets),probeB_ns_i)))
+
+        # Calculate pairwise euclidean distance
+        pairwise_dist = spatial.distance.cdist(probeA_i, probeB_i, metric="euclidean")
+
+        # Ligation
+
+
+        # Store the index of ligated probe A and B => list of lists
+        ligated_probe = [[],[]]
+        for i in range(pairwise_dist.shape[0]):
+
+            # Indices of probe B that can be ligated
+            proximity_probeB = np.argwhere(pairwise_dist[i,:]<=PLA_dist).flatten()
+            if ligate_all:
+                # Each PLA probe can be ligated with all proximity PLA probes B
+                dge[cell_i][[complex_ind[f"{probeA_target[i]}{sep}{probeB_target[s]}"] for s in proximity_probeB]] += len(proximity_probeB)
+
+            else:
+                # Each PLA probe A or B can only be ligated at most once
+                # Iterate through each probe A, then check for probe B within the ligation distance
+                # If more than 1 probe B is, then chose the partner probe B randomly to be ligated
+                # The chosen probe B is excluded from further ligation
+
+                probeB_blacklist = set([]) # index of excluded probes B
+
+                ligation_set = set(proximity_probeB) - probeB_blacklist
+                # Random ligation
+                if len(ligation_set) > 0:
+                    # Will ligation happen
+                    if random.random() < ligation_efficiency*np.random.normal(loc=1,scale=0.2,size=1):
+                        chosen = random.sample(ligation_set, 1)
+                        probeB_blacklist.add(chosen[0])
+                        ligated_probe[0].append(i)
+                        ligated_probe[1].append(chosen[0])
+
+                        # Save to dge dictionary
+                        dge[cell_i][complex_ind[f"{probeA_target[i]}{sep}{probeB_target[chosen[0]]}"]] += 1
+
+        # Keep track of time
+        if (cell_i+1) % 10 == 0:
+            print(f'{datetime.datetime.now().replace(microsecond=0)}     Processed {cell_i+1:>5} cells')
+
+    # Convert dictionary to pandas data frame
+    complex_ind_new = [f'{i+1}{sep}{j+1}' for i in range(NA_targets) for j in range(NB_targets)] # update protein id from 0 to 1, 1 to 2, etc.
+    return (pd.DataFrame(dge, index=complex_ind_new),
+            pd.DataFrame(dge_complex_true, index=complex_ind_new),
+            pd.DataFrame(dge_ns_true, index=[f"{i+1}_A" for i in range(NA_targets)]+[f"{i+1}_B" for i in range(NB_targets)]))
+
+# old variance model
+def simulatePLAcopy(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
                 n_cells=100, ligation_efficiency=1, ligate_all=False,
                 cell_variance=True, mode='2D',
                 seed_num=None, sep=':'):
