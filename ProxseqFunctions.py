@@ -62,7 +62,7 @@ def randomPointGen3D(n):
 # =============================================================================
 def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
                 n_cells=100, ligation_efficiency=1, ligate_all=False,
-                cell_variance=False, mode='2D',
+                protein_variance=False, cell_variance=False, mode='2D',
                 seed_num=None, sep=':'):
     '''
     A function to simulate PLA counts of a cocktail of N targets.
@@ -71,7 +71,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     ----------
     num_complex : numpy array 
         An NA-by-NB array containing the number of complexes on each cell
-        (NA and NB is the number of targets of probe A and B), and element ij is
+        (NA and NB is the number of targets of probe A and B), and element i,j is
         the abundance of complex i:j.
     probeA_ns : numpy array
         An NA-by-1 array containing the number of expressed proteins bound by
@@ -92,14 +92,17 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     ligation_efficiency : float
         The chance of a PLA pair being ligated (between 0 and 1).
     ligate_all : boolean
-        Whether only 1 PLA pair or all pairs are allowed to be ligated.
+        Whether only 1 PLA pair or all pairs are allowed to be ligated.    
+        Default is False
+    cell_variance : boolean
+        Whether to simulate variance of protein/complex expression (scaled gamma distribution).
         Default is False
     cell_variance : boolean
         Whether to simulate variance due to cell size (log normal distribution).
-        Default is True
+        Default is False
     mode : string
-        '2D' (PLA probes are on cell surface, default) or '3D' (PLA probes are
-                                                                intracellular).
+        '2D' (PLA probes are on cell surface, default) or
+        '3D' (PLA probes are intracellular).
     seed_num : float, optional
         The seed number for RNG.
         Default is None.
@@ -119,6 +122,14 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
         
     '''
 
+    # Check for the length of input probe and complex arrays
+    if len(probeA_ns) != len(probeB_ns):
+        raise ValueError("probeA_ns and probeB_ns must have equal length!")
+    if num_complex.shape[0] != num_complex.shape[1]:
+        raise ValueError("non_complex must be a square 2D array!")
+    if num_complex.shape[0] != len(probeA_ns):
+        raise ValueError("non_complex and probeA_ns, probeB_ns must have the same length!")
+        
     # Seed number
     np.random.seed(seed_num)
     random.seed(seed_num)
@@ -164,22 +175,71 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
     #                                   (num_complex.shape[0],num_complex.shape[1],n_cells))
     
     # Cell variance: negative binomial: variance = 10*mean
+    # variance_probeA_ns = []
+    # variance_probeB_ns = []
+    # variance_complex = []
+    # NB_p = 1/10 # variance = 10*mean
+    # if cell_variance:
+    #     for i in range(len(probeA_ns)):
+    #         variance_probeA_ns.append(np.random.negative_binomial(n=probeA_ns[i]*NB_p/(1-NB_p), p=NB_p, size=n_cells))
+    #     for i in range(len(probeB_ns)):
+    #         variance_probeB_ns.append(np.random.negative_binomial(n=probeB_ns[i]*NB_p/(1-NB_p), p=NB_p, size=n_cells))
+    #     for i in range(num_complex.shape[0]):
+    #         variance_complex.append([])
+    #         for j in range(num_complex.shape[1]):
+    #             if num_complex[i,j] == 0:
+    #                 variance_complex[i].append(np.zeros(n_cells).astype(int))
+    #             else:
+    #                 variance_complex[i].append(np.random.negative_binomial(n=num_complex[i,j]*NB_p/(1-NB_p), p=NB_p, size=n_cells))
+    #     variance_probeA_ns = np.array(variance_probeA_ns)
+    #     variance_probeB_ns = np.array(variance_probeB_ns)
+    #     variance_complex = np.reshape(np.array(variance_complex),
+    #                                   (num_complex.shape[0],num_complex.shape[1],n_cells))
+    
+    # Cell variance: scaled negative binomial
+    # X*mean/X_i ~ NegativeBinomial(n,p) (NB has mean = 5 and variance = 50)
+    # variance_probeA_ns = []
+    # variance_probeB_ns = []
+    # variance_complex = []
+    # NB_p = 1/10 # variance = 10*mean
+    # NB_n = 5*NB_p/(1-NB_p)
+    # if cell_variance:
+    #     for i in range(len(probeA_ns)):
+    #         variance_probeA_ns.append(np.random.negative_binomial(n=NB_n, p=NB_p, size=n_cells)/5*probeA_ns[i])
+    #     for i in range(len(probeB_ns)):
+    #         variance_probeB_ns.append(np.random.negative_binomial(n=NB_n, p=NB_p, size=n_cells)/5*probeB_ns[i])
+    #     for i in range(num_complex.shape[0]):
+    #         variance_complex.append([])
+    #         for j in range(num_complex.shape[1]):
+    #             if num_complex[i,j] == 0:
+    #                 variance_complex[i].append(np.zeros(n_cells))
+    #             else:
+    #                 variance_complex[i].append(np.random.negative_binomial(n=NB_n, p=NB_p, size=n_cells)/5*num_complex[i,j])
+    #     variance_probeA_ns = np.array(variance_probeA_ns).astype(int)
+    #     variance_probeB_ns = np.array(variance_probeB_ns).astype(int)
+    #     variance_complex = np.reshape(np.array(variance_complex),
+    #                                   (num_complex.shape[0],num_complex.shape[1],n_cells)).astype(int)
+        
+    # Cell variance: scaled gamma
+    # X2/X_i ~ Gamma(shape=1,scale=2)
     variance_probeA_ns = []
     variance_probeB_ns = []
     variance_complex = []
-    temp_p = 1/10
-    if cell_variance:
+    g_shape = 1
+    g_scale = 2
+    # Add protein variance
+    if protein_variance:
         for i in range(len(probeA_ns)):
-            variance_probeA_ns.append(np.random.negative_binomial(n=probeA_ns[i]*temp_p/(1-temp_p), p=temp_p, size=n_cells))
-        for i in range(len(probeB_ns)):
-            variance_probeB_ns.append(np.random.negative_binomial(n=probeB_ns[i]*temp_p/(1-temp_p), p=temp_p, size=n_cells))
+            temp_scale = np.random.gamma(shape=g_shape, scale=g_scale, size=n_cells)
+            variance_probeA_ns.append(temp_scale/2*probeA_ns[i])
+            variance_probeB_ns.append(temp_scale/2*probeB_ns[i])
         for i in range(num_complex.shape[0]):
             variance_complex.append([])
             for j in range(num_complex.shape[1]):
                 if num_complex[i,j] == 0:
-                    variance_complex[i].append(np.zeros(n_cells).astype(int))
+                    variance_complex[i].append(np.zeros(n_cells))
                 else:
-                    variance_complex[i].append(np.random.negative_binomial(n=num_complex[i,j]*temp_p/(1-temp_p), p=temp_p, size=n_cells))
+                    variance_complex[i].append(np.random.gamma(shape=g_shape, scale=g_scale, size=n_cells)/2*num_complex[i,j])
         variance_probeA_ns = np.array(variance_probeA_ns)
         variance_probeB_ns = np.array(variance_probeB_ns)
         variance_complex = np.reshape(np.array(variance_complex),
@@ -192,15 +252,19 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
 
         dge[cell_i] = np.zeros((NA_targets*NB_targets,))
 
-        # Add cell variance if required
+        # Add cell variance with log-normal distribution            
         if cell_variance:
-            probeA_ns_i = variance_probeA_ns[:,cell_i]
-            probeB_ns_i = variance_probeB_ns[:,cell_i]
-            num_complex_i = variance_complex[:,:,cell_i]
+            scale_i = np.random.lognormal(mean=0,sigma=0.5,size=1)
         else:
-            num_complex_i = copy.deepcopy(num_complex).astype(int)
-            probeA_ns_i = copy.deepcopy(probeA_ns).astype(int)
-            probeB_ns_i = copy.deepcopy(probeB_ns).astype(int)
+            scale_i = 1
+        if protein_variance:
+            probeA_ns_i = copy.deepcopy(variance_probeA_ns[:,cell_i]*scale_i).round().astype(int)
+            probeB_ns_i = copy.deepcopy(variance_probeB_ns[:,cell_i]*scale_i).round().astype(int)
+            num_complex_i = copy.deepcopy(variance_complex[:,:,cell_i]*scale_i).round().astype(int)
+        else:
+            num_complex_i = copy.deepcopy(num_complex*scale_i).astype(int)
+            probeA_ns_i = copy.deepcopy(probeA_ns*scale_i).astype(int)
+            probeB_ns_i = copy.deepcopy(probeB_ns*scale_i).astype(int)
 
         # Save the true complex abundance
         dge_complex_true[cell_i] = num_complex_i.reshape(-1,)
@@ -284,7 +348,7 @@ def simulatePLA(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
             pd.DataFrame(dge_ns_true, index=[f"{i+1}_A" for i in range(NA_targets)]+[f"{i+1}_B" for i in range(NB_targets)]))
 
 # old variance model
-def simulatePLAcopy(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
+def simulatePLA_old(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50,
                 n_cells=100, ligation_efficiency=1, ligate_all=False,
                 cell_variance=True, mode='2D',
                 seed_num=None, sep=':'):
@@ -307,10 +371,10 @@ def simulatePLAcopy(num_complex, probeA_ns, probeB_ns, cell_d=10000, PLA_dist=50
                  bound by PLA probe B).
     cell_d : float
         The cell diameter in nanometer.
-        Default is 50.
+        Default is 10,000.
     PLA_dist : float
         The ligation distance in nanometer.
-        Default is 10,000.
+        Default is 50.
     n_cells : int
         The number of cells to simulate.
     ligation_efficiency : float
@@ -592,6 +656,9 @@ def calculateExpected(data, PLA_list=None, sep=':'):
     AB2 = np.array([s.split(sep)[1] for s in data.index])
     for i in PLA_list:
         output.loc[i,:] = data.loc[AB1==i.split(sep)[0],:].sum(axis=0)*data.loc[AB2==i.split(sep)[1],:].sum(axis=0)/data.sum(axis=0)
+        
+    # Replace 0 divided by 0 with 0
+    output.fillna(0, inplace=True)
 
     return output
 
@@ -608,8 +675,8 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The adjustment values from the last iteration are used to update the adjustment values in the next iteration
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
-def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
-                      df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
+def predictComplex(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
+                      df_guess=None, start_complex=[], nIter=200, tol=5, sep=':'):
     '''
     Estimate complex abundance by iteratively solving a system of quadratic equations.
     
@@ -619,11 +686,8 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
         Input digital PLA expression matrix (PLA products x single cells).
     non_complex : list
         List of PLA products or proteins that do no form protein complexes.
-        Example: X:Y means X:Y does not form a complex, while X means X does
+        Example: [X:Y] means X:Y does not form a complex, while [X] means X does
         not form complexes with any other proteins.
-        Default is [].
-    non_express : list
-        List of protein targets that do not form complexes (eg, isotype antibodies).
         Default is [].
     mean_cutoff : float
         PLA products whose estimated complex abundance at each iteration fails
@@ -652,8 +716,8 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
     '''
 
     # Convert input data frame into numpy array
-    dge = data.copy().values
-    # Convert non_complexes list to sets
+    dge = data.to_numpy(copy=True)
+    # Convert lists to set
     non_complex = set(non_complex)
     start_complex = set(start_complex)
 
@@ -677,14 +741,15 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
 
         temp_dge = dge - dge_out
         for i in range(dge.shape[0]):
-
-            # Go through start_complex first
-            if len(start_complex) > 0:
-                if (loop_num == 0) and (i not in start_complex):
-                    temp_change[i,:] = 0
-                    continue
             temp_complex = data.index[i]
             temp_probeA, temp_probeB = temp_complex.split(sep) # target of probe A and B
+            
+            # Go through start_complex first
+            if start_complex:
+                if (loop_num == 0) and (temp_complex not in start_complex):
+                    temp_change[i,:] = 0
+                    continue
+            
 
             # Apply the constraints
             if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
@@ -692,10 +757,22 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
                 continue
 
             temp_expected = temp_dge[probeA==temp_probeA,:].sum(axis=0)*temp_dge[probeB==temp_probeB,:].sum(axis=0)/temp_dge.sum(axis=0)
+            # Replate 0 by 0 division (ie, nan) with 0
+            temp_expected[np.isnan(temp_expected)] = 0
+            
             temp_diff = dge[i,:] - temp_expected
 
-            # Check to see if the estimated abundance passes the mean_cutoff
+            # Check to see if the estimated abundance passes the mean_cutoff (old stats version doesn't have alternative option)
             # Ha: sample mean > mean_cutoff
+            # tval, tp = stats.ttest_1samp(temp_diff, mean_cutoff, alternative='greater')
+            # if tp > 0.01:
+            #     # check for symmetry
+            #     temp_symmetry = dge_out[data.index==f"{temp_probeB}{sep}{temp_probeA}",:]
+            #     if np.mean(temp_symmetry) > mean_cutoff:
+            #         temp_diff = sym_weight*temp_symmetry
+            #     else:
+            #         temp_change[i,:] = 0
+            #         continue
             tval, tp = stats.ttest_1samp(temp_diff, mean_cutoff)
             if (tval < 0) or (tp/2 > 0.01):
                 # check for symmetry
@@ -722,22 +799,25 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25,
         # Round the adjustment amount
         dge_out = np.round(dge_out)
         # Save the maximum change in the solution for convergence check
-        max_change = abs(temp_change).max()
+        max_change = np.abs(temp_change).max()
         
         loop_num += 1
 
-    print(f"estimateComplexes done: Loop number {loop_num}, tolerance {max_change:.2f}")
+    print(f"predictComplex done: Loop number {loop_num}, tolerance {max_change:.2f}")
     return pd.DataFrame(data=dge_out, index=data.index, columns=data.columns)
 
+
 # =============================================================================
-# # Function to estimate complex abundance, using non-complex forming probe A and B
+# # Function to predict non-complex PLA products, using non-complex forming reference probes
 # # Suppose probe Ak and Bl do not form any complex
 # # The expected count of non-complex PLA product i:j is
 # #             Eij = Xil*Xkj/Xkl
 # #     where Xij is the observed count of PLA product i:j
-# # The complex abundance of i:j is Xij - Eij
+# # Use this to predict which are unlikely to be complexes
+# # If there are more than one reference probes A and B, aggregate them into
+# # one reference probe A and one reference probe B
 # =============================================================================
-def estimateComplexes2(data, refA, refB, sep=':'):
+def findNonComplex(data, refA, refB, thres=0.01, sep=':'):
     '''
     Estimate complex abundance by using non-complex forming probes
 
@@ -745,31 +825,155 @@ def estimateComplexes2(data, refA, refB, sep=':'):
     ----------
     data : pandas data frame
         Input digital PLA expression matrix (PLA products x single cells).
-    refA : list
+    refA : list of string
         List of reference non-complex forming probe A
-    refB : list
+    refB : list of string
         List of reference non-complex forming probe B
+    thres : float
+        Threshold p-value to decide if a PLA product is within the predicted count
+        P-value is calculated from two-tailed paired t-test between 
+        Default is 0.01.
     sep : string, optional
         The separator convention in the names of PLA complexes.
         Default is ':'.
 
     Returns
     -------
-    A data frame with the same shape as df, containing estimated complex abundance
+    A list of non-complex PLA products, including the refA- and refB-related PLA products
 
     '''
-    out = pd.DataFrame(0, index=data.index, columns=data.columns)
+    refA, refB = set(refA), set(refB)
     
-    for i in out.index:
-        AB1, AB2 = i.split(sep)
-        if (AB1 == refA[0]) or (AB2 == refB[0]):
+    # Identity of probe A and B
+    probeA = np.array([s.split(sep)[0] for s in data.index])
+    probeB = np.array([s.split(sep)[1] for s in data.index])
+    
+    # Row index of refA- and refB-related PLA products
+    refA_ind = np.array([s.split(sep)[0] in refA for s in data.index])
+    refB_ind = np.array([s.split(sep)[1] in refB for s in data.index])
+    
+    # Add refA and refB probe to output
+    out = data.index[refA_ind | refB_ind].tolist()
+    
+    for i in np.unique(probeA):
+        if i in refA:
             continue
-        
-        out.loc[i,:] = data.loc[i,:] - data.loc[f"{AB1}{sep}{refB[0]}",:]*data.loc[f"{refA[0]}{sep}{AB2}",:]/data.loc[f"{refA[0]}{sep}{refB[0]}",:]
+        for j in np.unique(probeB):
+            if j in refB:
+                continue
+            # Expected count of i:j
+            Eij = data.loc[(probeA==i) & (refB_ind),:].sum(axis=0)*data.loc[(probeB==j) & (refA_ind),:].sum(axis=0)/data.loc[(refA_ind) & (refB_ind),:].sum(axis=0)
+            
+            # For 0/0, Eij = np.nan, so set these values to 0
+            Eij[np.isnan(Eij)] = 0
+            
+            # Check if i:j is non-complex
+            if stats.ttest_rel(Eij[np.isfinite(Eij)], data.loc[f"{i}{sep}{j}",np.isfinite(Eij)]).pvalue > thres:
+                out.append(f"{i}{sep}{j}")
     
     return out
-    
 
+def findNonComplex_old(data, refA, refB, thres=2, sep=':'):
+    '''
+    Estimate complex abundance by using non-complex forming probes
+
+    Parameters
+    ----------
+    data : pandas data frame
+        Input digital PLA expression matrix (PLA products x single cells).
+    refA : string
+        List of reference non-complex forming probe A
+    refB : string
+        List of reference non-complex forming probe B
+    thres : float
+        Threshold multiply factor to decide if a PLA product is within the predicted count
+        If Xij <= Eij + thres*S.E.(Eij), then i:j is a non-complex PLA product.
+        Default is 2.
+    sep : string, optional
+        The separator convention in the names of PLA complexes.
+        Default is ':'.
+
+    Returns
+    -------
+    A list of non-complex PLA products, including the refA and refB-related PLA products
+
+    '''
+    out = data.index[[s.split(sep)[0]==refA or s.split(sep)[1]==refB for s in data.index]].tolist()
+    
+    # Identity of probe A and B
+    probeA = np.unique([s.split(sep)[0] for s in data.index])
+    probeB = np.unique([s.split(sep)[1] for s in data.index])
+    
+    # Mean and variance of each PLA product:
+    data_mean = data.mean(axis=1)
+    data_var = data.var(axis=1)
+    
+    
+    for i in probeA:
+        if i == refA:
+            continue
+        for j in probeB:
+            if j == refB:
+                continue
+            # Expected count of i:j
+            Eij = data_mean[f"{i}{sep}{refB}"]*data_mean[f"{refA}{sep}{j}"]/data_mean[f"{refA}{sep}{refB}"]
+            # Error propagation of Eij variance
+            Eij_var = Eij**2*(data_var[f"{i}{sep}{refB}"]/data_mean[f"{i}{sep}{refB}"]**2 +
+                              data_var[f"{refA}{sep}{j}"]/data_mean[f"{refA}{sep}{j}"]**2 + 
+                              data_var[f"{refA}{sep}{refB}"]/data_mean[f"{refA}{sep}{refB}"]**2)
+            
+            # Check if i:j is non-complex
+            if data_mean[f"{i}{sep}{j}"] <= Eij + thres*np.sqrt(Eij_var/data.shape[1]):
+                out.append(f"{i}{sep}{j}")
+    
+    return out
+
+
+# =============================================================================
+# # Calculate a performance metric for protein complex prediction
+# # A high score mean the predicted complex count is accurate
+# =============================================================================
+def complexPredictionMetric(data, data_true, metric='mae'):
+    '''
+    Calculate a metric for the accuracy of predicted complex count. A higher
+    score indicates higher accuracy.
+
+    Parameters
+    ----------
+    data : pandas data frame
+        Predicted complex count. Columns are cell barcodes, rows are PLA products.
+    data_true : pandas data frame
+        True complex count. Columns are cell barcodes, rows are PLA products.
+    metric : string, one of ['sse']
+        The metric to be used.
+        mae: mean absolute error
+        mse: mean squared error
+        accuracy: accuracy, equal to ratio of correct prediction to the number of PLA products
+                (correct prediction means true positive and true negative complex)
+        tpr: true positive rate
+        fpr: false positive rate
+        The default is "mae".
+
+    Returns
+    -------
+    Returns a float number.
+
+    '''
+    
+    if metric == 'mae':
+        return np.abs((data-data_true).to_numpy()).mean()
+    elif metric == 'mse':
+        return (data-data_true).pow(2).to_numpy().mean()
+    elif metric == 'accuracy':
+        return 1 - ((data>0).any(axis=1) ^ (data_true>0).any(axis=1)).sum()/data.shape[0]
+    elif metric == 'tpr':
+        return ((data>0).any(axis=1) & (data_true>0).any(axis=1)).sum()/((data_true>0).any(axis=1).sum())
+    elif metric == 'fpr':
+        return ((data>0).any(axis=1) & (data_true==0).all(axis=1)).sum()/((data_true==0).all(axis=1).sum())
+    else:
+        raise ValueError("Invalid metric.")
+        
+        
 # =============================================================================
 # # Function to estimate probe abundance and complex abundance using the multinomial model
 # =============================================================================

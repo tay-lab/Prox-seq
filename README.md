@@ -1,6 +1,6 @@
 # Software for Prox-seq
 
-Prox-seq is a single-cell sequencing assay developed by Tay Lab at the University of Chicago. Prox-seq can be used to obtain gene expression profile and protein proximity information from single cells. There are two modes of operation for Prox-seq, one based on Drop-seq and one based on Smart-seq2. However, Prox-seq can be used with any poly-A-based single-cell RNA sequencing techniques.
+Prox-seq is a single-cell sequencing assay developed by Tay Lab at the University of Chicago. Prox-seq can be used to obtain gene expression profile and protein proximity information from single cells. There are two modes of operation for Prox-seq, one is droplet-based (eg, Drop-seq) Drop-seq and one is plate-based (eg, Smart-seq2). Prox-seq can readily be used with any poly-A-based single-cell RNA sequencing techniques.
 
 #### PLA alignment
 
@@ -12,4 +12,4 @@ Examples of how to use the program to align sequencing data from Drop-seq and Sm
 
 The ProxseqFunctions.py file contains functions used to estimate protein complex abundance.
 
-An example of how to use the functions to simulate PLA data, and estimate the protein complex abundance from it is provided.
+Please refer to [this example](https://github.com/tay-lab/Prox-seq/blob/master/PLA_data_analysis_example.ipynb) of how to predict the protein complex abundance from the Prox-seq count data.
