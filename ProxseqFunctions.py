@@ -316,48 +316,68 @@ class simulatePLA:
             
             # Calculate pairwise euclidean distance
             pairwise_dist = spatial.distance.cdist(probeA_i, probeB_i, metric="euclidean")
+            # pairwise_dist[i,j] = distance between probeA_i[i] and probeB_i[j]
     
             # Ligation =========
             # Go through each probe A, then see if it can ligate with any probe B
             probeB_blacklist = set([]) # index of blacklisted probes B, which are excluded from future ligation in ligate_all=False
             probeA_blacklist = set([]) # index of ligated probes A, used for unligated_count
             
-            # Shuffule the order of probe A
-            probeA_order = np.arange(pairwise_dist.shape[0])
-            np.random.shuffle(probeA_order)
-            for i in probeA_order:
-    
-                # Indices of probe B that can be ligated
-                proximity_probeB = np.argwhere(pairwise_dist[i,:] <= self.PLA_dist).flatten()
-                
-                # Continue if no proximity probe B is found
-                if len(proximity_probeB) == 0:
-                    continue
-                
-                # Add current probe A
-                probeA_blacklist.add(i)
-                
+            # Find pairs within ligation distance
+            valid_pairs = np.argwhere(pairwise_dist <= self.PLA_dist)
+            # Shuffle the pairs
+            np.random.shuffle(valid_pairs)
+            
+            # Iterate
+            for i in valid_pairs:
                 if self.ligate_all:
-                    # Each PLA probe can be ligated with all proximal PLA probes B
-                    for j in proximity_probeB:
-                        dge[cell_i][f"{probeA_targets[i]}{self.sep}{probeB_targets[j]}"] += 1
-                        probeB_blacklist.add(j)
-    
-                else:
-                    # Each PLA probe A or B can only be ligated at most once
-                    # Iterate through each probe A, then check for probe B within the ligation distance
-                    # If more than 1 probe B is, then chose the partner probe B randomly to be ligated
-                    # The chosen probe B is excluded from further ligation
+                    dge[cell_i][f"{probeA_targets[i[0]]}{self.sep}{probeB_targets[i[1]]}"] += 1
                     
-                    # Set of available probe B
-                    ligation_set = set(proximity_probeB) - probeB_blacklist
-                    # Random ligation
-                    if len(ligation_set) > 0:
-                        chosen = random.sample(ligation_set, 1)[0]
-                        probeB_blacklist.add(chosen)
+                else:
+                    if (i[0] in probeA_blacklist) or (i[1] in probeB_blacklist):
+                        continue
+                    else:
+                        dge[cell_i][f"{probeA_targets[i[0]]}{self.sep}{probeB_targets[i[1]]}"] += 1
+                
+                probeA_blacklist.add(i[0])
+                probeB_blacklist.add(i[1])
+            
+            # # Shuffule the order of probe A
+            # probeA_order = np.arange(pairwise_dist.shape[0])
+            # np.random.shuffle(probeA_order)
+            # for i in probeA_order:
     
-                        # Save to dge dictionary
-                        dge[cell_i][f"{probeA_targets[i]}{self.sep}{probeB_targets[chosen]}"] += 1
+            #     # Indices of probe B that can be ligated
+            #     proximity_probeB = np.argwhere(pairwise_dist[i,:] <= self.PLA_dist).flatten()
+                
+            #     # Continue if no proximity probe B is found
+            #     if len(proximity_probeB) == 0:
+            #         continue
+                
+            #     # Add current probe A
+            #     probeA_blacklist.add(i)
+                
+            #     if self.ligate_all:
+            #         # Each PLA probe can be ligated with all proximal PLA probes B
+            #         for j in proximity_probeB:
+            #             dge[cell_i][f"{probeA_targets[i]}{self.sep}{probeB_targets[j]}"] += 1
+            #             probeB_blacklist.add(j)
+    
+            #     else:
+            #         # Each PLA probe A or B can only be ligated at most once
+            #         # Iterate through each probe A, then check for probe B within the ligation distance
+            #         # If more than 1 probe B is, then chose the partner probe B randomly to be ligated
+            #         # The chosen probe B is excluded from further ligation
+                    
+            #         # Set of available probe B
+            #         ligation_set = set(proximity_probeB) - probeB_blacklist
+            #         # Random ligation
+            #         if len(ligation_set) > 0:
+            #             chosen = random.sample(ligation_set, 1)[0]
+            #             probeB_blacklist.add(chosen)
+    
+            #             # Save to dge dictionary
+            #             dge[cell_i][f"{probeA_targets[i]}{self.sep}{probeB_targets[chosen]}"] += 1
             
             # Tally the unligated probe count
             dge_unligated[cell_i] = {}
