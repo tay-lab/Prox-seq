@@ -1722,9 +1722,8 @@ public class PLA_alignment
 				System.out.printf("%n");
 				
 				// Each PLA product is described by 2 features: [cell barcode/AB1 ID/AB2 ID], and [UMI]. We shall call these feature 1 and 2, respectively
-				// Initialize
-				List<String> UMIarray = new ArrayList<String>(); // ArrayList to store all UMI
-				ListMultimap<String, Integer> PLAproductmap = ArrayListMultimap.create(); // ArrayListMultimap to store unique feature 1's and its index (for indexing UMIarray)
+				// Initialize ArrayListMultimap: key is unique feature 1's, value is its corresponding feature 2's
+				ListMultimap<String, String> PLAproductmap = ArrayListMultimap.create();
 				
 				// Read the file
 				System.out.printf("%s   UMIMerging   Start pre-processing records%n", LocalDateTime.now().format(time_formatter));
@@ -1735,8 +1734,7 @@ public class PLA_alignment
 				while ((line = brI.readLine()) != null)
 				{
 					String[] values = line.split(",");
-					UMIarray.add(values[1]);
-					PLAproductmap.put(values[0] + "," + values[2] + "," + values[3], record_counter);
+					PLAproductmap.put(values[0] + "," + values[2] + "," + values[3], values[1]); // add feature 1 and feature 2
 					record_counter++;
 					if ((record_counter % 1_000_000) == 0)
 					{
@@ -1759,27 +1757,25 @@ public class PLA_alignment
 
 					// Hash Multiset to store unique UMIs and their number of occurrences
 					Multiset<String> temp_UMIcounts = HashMultiset.create();
-					// Hashset to store unique UMIs, from which duplicated UMIs will be removed
-					Set<String> temp_UMI = new HashSet<>();
 					
-					// Get the UMIs associated with this feature 1
-					for (int j : PLAproductmap.get(str_i))
+					// Get the UMIs and their read counts associated with this feature 1
+					for (String j : PLAproductmap.get(str_i))
 					{
-						temp_UMIcounts.add(UMIarray.get(j));
-						temp_UMI.add(UMIarray.get(j));
+						temp_UMIcounts.add(j);
 					}
 					
 					// Hashset to store unique UMIs, from which duplicated UMIs have been removed
-					Set<String> temp_UMI_updated = new HashSet<>(temp_UMI);
+					Set<String> temp_UMI_updated = new HashSet<>(temp_UMIcounts.elementSet());
 					
 					// Sort the HashMultiset by decreasing occurrences, and save to an array
 					String[] temp_UMI_sortedbycounts = Multisets.copyHighestCountFirst(temp_UMIcounts).elementSet().toArray(new String[0]);
 					
 					// Iterate through the unique UMIs in order of increasing occurrences, and convert UMIs to UMIs that are within 1 hamming distance and have higher read counts
-					// Slow step**** //
+					// ****Slow step**** probably faster with BK-Tree //
 					for (int j=(temp_UMI_sortedbycounts.length-1); j>=0; j--)
 					{
-						temp_UMI = new HashSet<>(temp_UMI_updated);
+						// Temporary set for iteration
+						Set<String> temp_UMI = new HashSet<>(temp_UMI_updated);
 						for (String str_j : temp_UMI)
 						{
 							if (HammingDistanceCalculator(str_j, temp_UMI_sortedbycounts[j], true) == 1)
@@ -1790,7 +1786,7 @@ public class PLA_alignment
 						}
 					}
 					
-					// Write out the UMI corrected reads
+					// Export the unique UMI reads
 					String[] values = str_i.split(",");
 					for (String str_j : temp_UMI_updated)
 					{
@@ -1813,7 +1809,7 @@ public class PLA_alignment
 				
 				// Write to summary file
 				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " unique cell barcode-PLA pair combinations"); bwsum.newLine();
-				bwsum.write("Number of unique PLA products: " + String.format("%,d", unique_counter)); bwsum.newLine();
+				bwsum.write("Number of unique PLA products: " + String.format("%,d", unique_counter)); bwsum.newLine(); bwsum.newLine();
 
 				
 				
