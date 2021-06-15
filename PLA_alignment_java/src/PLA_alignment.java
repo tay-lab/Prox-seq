@@ -1138,7 +1138,6 @@ public class PLA_alignment
 		
 		/**
 		 * Perform cell barcode correction from aligned reads (ie, output of ReadAlignmentDropSeq)
-		 * Use a list of reference cell barcodes to correct the cell barcodes of the reads
 		 * Does NOT use any reference cell barcodes (while CellBarcodeCorrection does)
 		 * 		I=... O=... SUMMARY=...
 		 * 
@@ -1826,10 +1825,6 @@ public class PLA_alignment
 		 * Input arguments
 		 * 		I: path to cell barcode corrected file (txt.gz format)
 		 * 		O: path to store output file (txt.gz format)
-		 * Merge the following cases:
-		 * 		Exact matches
-		 * 		Match with 1 hamming distance to exactly one other UMI
-		 * This means that barcodes that match at 1 hamming distance to more than 1 other sequences are discarded 
 		 */
 		
 		case "ReadcountHistogram":
@@ -1892,8 +1887,8 @@ public class PLA_alignment
 		 * 		I: path to the UMI merged file (txt.gz format)
 		 * 		O: path to store the digital count matrix (txt.gz format)
 		 * 		CELL_BC_LIST: a list of chosen cell barcodes (from knee plot) (txt format). If NONE (default), export all detected cell barcodes
-		 * 		HEADER: whether the CELL_BC_LIST has header to be skipeed (default is false)
-		 * 		SUMMARY: path to store the summary file (txt format)
+		 * 		HEADER: whether the CELL_BC_LIST has header to be discarded (default is false)
+		 * 		SUMMARY: path to store the summary file (txt format). The default is the current working directory.
 		 * 		DUPLICATE_EXPORT: path to store the list (txt.gz format) of duplicated PLA products across cells (ie, PLA molecules that have the same UMI and PLA IDs).
 		 * 				By default, the export file is saved in the current working directory as duplicate_export.txt
 		 * 		REMOVE_DUPLICATE: whether to remove duplicated PLA products across cells (default is false)
