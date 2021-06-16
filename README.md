@@ -8,7 +8,7 @@ There are two modes of operation for Prox-seq, one is droplet-based (eg, Drop-se
 
 A Java program is used to align PLA sequencing reads to a reference list of antibody barcode, and returns a matrix of PLA product counts.
 
-Examples of how to use the program to align sequencing data from Drop-seq and droplet-based pipelines are provided.
+Please refer to [the manual](https://github.com/tay-lab/Prox-seq/blob/master/alignment_manual.pdf) on how to use the alignment program.
 
 #### Prox-seq data analysis
 
