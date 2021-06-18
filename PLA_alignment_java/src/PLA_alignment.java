@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.TreeSet;
 import java.util.Objects;
@@ -159,7 +160,7 @@ public class PLA_alignment
 		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
 		 * 		HEADER: whether the ABfile has header to be skipped (default is false)
 		 * 
-		 * Output format: cell barcodes , UMI , AB1 ID , AB2 ID
+		 * Output format: cell barcodes,UMI,AB1 ID,AB2 ID
 		 */
 		case "ReadAlignmentDropSeq":
 		{
@@ -255,8 +256,6 @@ public class PLA_alignment
 							
 					else if ((counter % 4) == 1)
 					{
-						
-						
 						
 						// Expected location of connector starts at index 39 (base 40th)
 						int connector_start = 39;					
@@ -789,8 +788,218 @@ public class PLA_alignment
 			break;
 		}
 		
+		
+		/* ********** NEW method **********
+		 * Cell barcode correction from aligned reads (ie, output of ReadAlignmentDropSeq)
+		 * Use a list of reference cell barcodes to correct the cell barcodes of the reads
+		 * 		I=... O=... SUMMARY=...
+		 * 
+		 * Input arguments:
+		 * 		I: path to aligned reads (txt.gz format)
+		 * 		O: path to store output file (txt.gz format)
+		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
+		 * 		CELL_BC_LIST: path to a comma-separated list of cell barcodes produced by drop-seq pipeline (rows are cell barcodes, column 0 is readcount, column 1 is the cell barcode sequence)
+		 * 		^^^^^^^^^^^^ output of drop-seq tools' BAMTagHistogram function (txt.gz format)
+		 * 		READCOUNT_CUTOFF: only keep the barcode sequence with at least this number of readcount (default is 1000)
+		 * 		HEADER: whether the CELL_BC_LIST have header, which will be skipped (default is false)
+		 * 
+		 * Correction method: n-gram with Hamming distance <=1
+		 * 		Split the query cell barcode into 2 equal halves
+		 * 		Example: barcode "123N5679" is split into "123N" and "5679"
+		 * 		Then check each half for perfect matching, and check the remaining half to see if it matches to at most one other barcode at 1 Hamming distance
+		 * 		(ie, discard cell barcodes that have more than 1 matching cell barcodes with Hamming = 1)
+		 * 		An N read is counted as 1 mismatch.  
+		 */
+		case "CellBarcodeCorrection":
+		{
+			
+			// Parse the arguments
+			String I = "", O = "", cell_BC_path = "";
+			String SUMMARY = System.getProperty("user.dir") + File.separator + "CellBarcodeCorrection_summary.txt"; // default summary file directory
+			int rc_cutoff = 1000;
+			boolean skip_header = false;
+			for (int i=1; i<args.length; i++)
+			{
+				String[] j = args[i].split("=");
+				
+				if (j.length < 2) {throw new java.lang.IllegalArgumentException("Whitespaces are not allowed between argument key specifier and the argument!");}
+				
+				switch (j[0])
+				{
+				case "I": I = j[1]; break;
+				case "O": O = j[1]; break;
+				case "SUMMARY": SUMMARY = j[1]; break;
+				case "CELL_BC_LIST": cell_BC_path = j[1]; break;
+				case "READCOUNT_CUTOFF": rc_cutoff = Integer.parseInt(j[1]); break;
+				case "HEADER": skip_header = "true".equalsIgnoreCase(j[1]); break;
+				default: throw new java.lang.IllegalArgumentException("Invalid argument key specifier!");
+				}
+			}
+			
+			try (
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
+					BufferedReader brBC = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(cell_BC_path)))); // cell barcode list
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
+					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+				)
+			{
+				// Write out the command line arguments
+				for (String j : args)
+				{
+					bwsum.write(j + " "); bwsum.newLine();
+					System.out.println(j);
+				}
+				bwsum.newLine();
+				System.out.println();
+				
+				// Set up the counters for the summary files
+				int PLA_counter = 0; // counter for the number of valid PLA reads
+				int exact_counter = 0; // counter for the number of reads with exact match
+				int ambiguous_counter = 0; // counter for the number of reads that matches ambiguously with reference cell barcodes (ie, more than 1 cell barcode with 1 hamming distance)
+				int nomatch_counter = 0; // counter for the number of reads with no match
+				int manyN_counter = 0; // counter for the number of reads with more than 1 N in the cell barcode region
+				int ref_counter = 0; // counter for the number of reference cell barcodes
+				
+				// Initialize an ArrayListMultimap
+				// BC1_map: key is a unique first half, value is an arraylist of second halves that match with the key
+				// BC1_map: key is a unique second half, value is an arraylist of first halves that match with the key
+				ListMultimap<String, String> BC1_mmap = ArrayListMultimap.create();
+				ListMultimap<String, String> BC2_mmap = ArrayListMultimap.create();
+				
+				// Read the reference cell barcodes and build the multimap
+				if (skip_header) {brBC.readLine();} // Skip first line if required
+				System.out.printf("%s   CellBarcodeCorrection   Start processing reference cell barcodes%n", LocalDateTime.now().format(time_formatter));
+				String BCline;
+				
+				while ((BCline=brBC.readLine()) != null)
+				{
+					String[] values = BCline.split("\t");
+					if (Integer.parseInt(values[0]) >= rc_cutoff)
+					{
+						// Split the reference barcode into 2 equal halves, and store them in the ArrayListMultimap
+						String BC1 = values[1].substring(0, values[1].length()/2);
+						String BC2 = values[1].substring(values[1].length()/2);
+						BC1_mmap.put(BC1, BC2);
+						BC2_mmap.put(BC2, BC1);
+						
+						ref_counter++;
+					}
+					else
+					{break;} // break when lower than the read count cutoff
+				}
+				
+				// n-gram matching
+				String line;
+				int counter = 0;
+				long my_timer = System.currentTimeMillis();
+				System.out.printf("%s   Start cell barcode correction%n", LocalDateTime.now().format(time_formatter));
+				bwsum.write("Start cell barcode correction at " + LocalDateTime.now()); bwsum.newLine();
+				while ((line=brI.readLine()) != null)
+				{
+						
+					// Time stamp (put here because there are continue statements below)
+					if ((counter>0) && (counter % 1000000 == 0))
+					{
+						System.out.printf("%s   CellBarcodeCorrection   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+								LocalDateTime.now().format(time_formatter), counter, (System.currentTimeMillis()-my_timer)/1000);
+						my_timer = System.currentTimeMillis();
+					}
+					
+					// Read the cell barcodes, UMI and AB IDs
+					List<String> values = new ArrayList<String>(Arrays.asList(line.split(",")));
+					
+					// counter for how many barcodes have hamming distance <= 1, discard cell barcode if counter >=2
+					int match_counter = 0;
+					
+					// Discard cell barcodes with more than 1 Ns
+					if (StringUtils.countMatches(values.get(0), "N") > 1)
+					{
+						manyN_counter++;
+						counter++;
+						continue;
+					} else
+					{
+						// Split cell barcodes into half, and compare each to the reference cell barcodes
+						String BC1 = values.get(0).substring(0, values.get(0).length()/2);
+						String BC2 = values.get(0).substring(values.get(0).length()/2);
+						
+						// Check if the first half has a match
+						if (BC1_mmap.containsKey(BC1))
+						{
+							// Look for matching second half
+							for (String i : BC1_mmap.get(BC1))
+							{
+								int distance = HammingDistanceCalculator(BC2, i, false); // does not allow N matching
+								if (distance == 0)
+								{
+									exact_counter++;
+									match_counter = 1;
+									break;
+								}
+								else if (distance == 1)
+								{
+									match_counter++;
+									values.set(0, BC1 + i); // correct the cell barcode
+								}
+							}
+						}
+						// Check if the second half has a match
+						if (BC2_mmap.containsKey(BC2))
+						{
+							// Look for matching first half
+							for (String i : BC2_mmap.get(BC2))
+							{
+								int distance = HammingDistanceCalculator(BC1, i, false); // does not allow N matching
+								if (distance == 0)
+								{
+									exact_counter++;
+									match_counter = 1;
+									break;
+								}
+								else if (distance == 1)
+								{
+									match_counter++;
+									values.set(0, i + BC2); // correct the cell barcode
+								}
+							}
+						}
+					}
+					
+					if (match_counter == 1)
+					{
+						PLA_counter++;
+						bwout.write(String.join(",", values));
+						bwout.newLine();
+					}
+					else if (match_counter == 0) // no matching barcode is found
+					{
+						nomatch_counter++;
+					}
+					else if (match_counter >= 2) // discard ambiguous matches
+					{
+						ambiguous_counter++;
+					}
+					
+					counter++;
+				}
+				
+				System.out.printf("%s   CellBarcodeCorrection   Done%n", LocalDateTime.now().format(time_formatter));
+				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
+				
+				// Write to summary file
+				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
+				bwsum.write("Number of reference cell barcodes " + String.format("%,d", ref_counter)); bwsum.newLine();
+				bwsum.write("Number of accepted PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
+				bwsum.write("Number of exact matches: " + String.format("%,d",exact_counter)); bwsum.newLine();
+				bwsum.write("Number of discarded ambiguous reads: " + String.format("%,d",ambiguous_counter)); bwsum.newLine();
+				bwsum.write("Number of discarded non-matching reads: " + String.format("%,d",nomatch_counter)); bwsum.newLine();
+				bwsum.write("Number of discarded cell barcodes with more than 1 N base: " + String.format("%,d", manyN_counter)); bwsum.newLine();
+				
+			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			break;
+		}
 
-		/**
+		/* ********** OLD method **********
 		 * Cell barcode correction from aligned reads (ie, output of ReadAlignmentDropSeq)
 		 * Use a list of reference cell barcodes to correct the cell barcodes of the reads
 		 * 		I=... O=... SUMMARY=...
@@ -811,7 +1020,7 @@ public class PLA_alignment
 		 * 		Then check for matching "123" and "5678" in the reference n-grams
 		 * 		Look for perfectly matched cell barcodes, or cell barcodes that are unambiguously mismatched by 1 Hamming distance (ie, discard cell barcodes that have more than 1 matching cell barcodes with Hamming = 1) 
 		 */	
-		case "CellBarcodeCorrection":
+		case "CellBarcodeCorrectionOld":
 		{
 			
 			// Parse the arguments
@@ -1136,14 +1345,222 @@ public class PLA_alignment
 		}
 
 		
+		/*
+		 * Build a list of reference cell barcodes from alignment results from scratch
+		 * 		I=... O=... SUMMARY=...
+		 * 
+		 * Input arguments:
+		 * 		I: path to aligned file (txt.gz format)
+		 * 		O: path to the reference cell barcodes (txt.gz format)
+		 * 			First column is read counts, second column is the cell barcodes (ordered by descending read counts)
+		 * 			Similar in format to Drop-seq tools BAMTagHistogram function's output.
+		 * 			Has a header row.
+		 * 		SUMMARY: path to store summary file (txt format). Default is current working directory.
+		 * 
+		 * A list of unique reference cell barcodes is built as following:
+		 * 		Order cell barcodes by descending read counts.
+		 * 		Merge two cell barcodes that are 1 Hamming distance different.
+		 * 		The final, merged cell barcode is the one with higher original read count.
+		 * 		Any cell barcodes matched with more than 1 other cell barcodes are discarded.
+		 */
+		
+		case "BuildCellBarcodes":
+		{
+			// Parse the arguments
+			String I = "", O = "";
+			String SUMMARY = System.getProperty("user.dir") + File.separator + "BuildCellBarcodes_summary.txt"; // default summary file directory
+			for (int i=1; i<args.length; i++)
+			{
+				String[] j = args[i].split("=");
+				
+				if (j.length < 2) {throw new java.lang.IllegalArgumentException("Whitespaces are not allowed between argument key specifier and the argument!");}
+				
+				switch (j[0])
+				{
+				case "I": I = j[1]; break;
+				case "O": O = j[1]; break;
+				case "SUMMARY": SUMMARY = j[1]; break;
+				default: throw new java.lang.IllegalArgumentException("Invalid argument key specifier!");
+				}
+			}
+									
+			// Read the file once to collect the cell barcodes
+			try (
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
+					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+				)
+			{
+				// Write out the command line arguments
+				for (String j : args)
+				{
+					System.out.println(j);
+					bwsum.write(j); bwsum.newLine();
+				}
+				System.out.println();
+				
+				// Time stamp
+				System.out.printf("%s   BuildCellBarcodes   Start processing detected cell barcodes%n", LocalDateTime.now().format(time_formatter));
+				bwsum.write("BuildCellBarcodes: started at " + LocalDateTime.now().withNano(0)); bwsum.newLine();
+
+				
+				// Get read counts of each cell barcode using a HashMultiset
+				Multiset<String> BC = HashMultiset.create();
+				// Split each barcode into 2 halves, and build n-game multimaps
+				// BC1_map: key is a unique first half, value is an arraylist of second halves that match with the key
+				// BC1_map: key is a unique second half, value is an arraylist of first halves that match with the key
+				ListMultimap<String, String> BC1_mmap = ArrayListMultimap.create();
+				ListMultimap<String, String> BC2_mmap = ArrayListMultimap.create();
+				
+				// Read the cell barcodes
+				String line;
+				while ( (line = brI.readLine()) != null )
+				{
+					String[] values = line.split(",");
+					BC.add(values[0]);
+					
+					if (BC.count(values[0]) == 1)
+					{
+						// Split the cell barcode into 2 equal halves, and store them in the ArrayListMultimap
+						String BC1 = values[0].substring(0, values[0].length()/2);
+						String BC2 = values[0].substring(values[0].length()/2);
+						BC1_mmap.put(BC1, BC2);
+						BC2_mmap.put(BC2, BC1);
+					}
+				}
+				
+				// Time stamp
+				System.out.printf("%s   BuildCellBarcodes   Start merging cell barcodes%n", LocalDateTime.now().format(time_formatter));
+				long my_timer = System.currentTimeMillis();
+				// Counter for time stamp
+				int counter = 0;
+				// Counter for ambiguous matches
+				int ambiguous_counter = 0;
+				
+				// Merge cell barcodes that uniquely match to another cell barcode at 1 Hamming distance
+//				List<String> BC_all = new ArrayList<String>(BC.elementSet());
+				// Save the cell barcodes to be merged to a hashmap: key is cell barcode before merging (to be removed), value is the cell barcode after merging (to be kept)
+				HashMap<String, String> BC_to_remove = new HashMap<String, String>();
+				for (String i : BC.elementSet())
+				{
+					// Split the query cell barcodes into 2 halves
+					String BC1 = i.substring(0, i.length()/2);
+					String BC2 = i.substring(i.length()/2);
+					
+					// Temporary variable to store the "good" cell barcode to merge with
+					String temp = "N";
+					// Number of matches with 1 Hamming distance
+					int match_counter = 0;
+					
+					
+					// Check if matching first half
+					if (BC1_mmap.containsKey(BC1))
+					{
+						for (String j : BC1_mmap.get(BC1))
+						{
+							if (HammingDistanceCalculator(BC2, j, false) == 1) // does not allow N matching
+							{
+								match_counter++;
+								temp = BC1 + j; // correct the cell barcode
+							}
+						}
+					}
+					// Check if matching second half
+					if (BC2_mmap.containsKey(BC2))
+					{
+						for (String j : BC2_mmap.get(BC2))
+						{
+							if (HammingDistanceCalculator(BC1, j, false) == 1)
+							{
+								match_counter++;
+								temp = j + BC2; // correct the cell barcode
+							}
+						}
+					}
+					
+					if ((match_counter == 1) && (BC.count(i) <= BC.count(temp))) // merge with the cell barcode with higher read count
+					{
+//						BC.add(temp, BC.count(i));
+						BC_to_remove.put(i, temp);
+					}
+					else if (match_counter > 1) // discard ambiguous matches
+					{
+						BC_to_remove.put(i, "none");
+						ambiguous_counter++;
+					}
+					
+					counter++;
+					if (counter % 10000 == 0)
+					{
+						System.out.printf("%s   BuildCellBarcodes   Processed %,15d cell barcodes   Elapsed time for last 1,000,000 records: %ds%n",
+								LocalDateTime.now().format(time_formatter), counter, (System.currentTimeMillis()-my_timer)/1000);
+						my_timer = System.currentTimeMillis();
+					}
+				}
+				
+				// Remove the stored cell barcodes
+				for (String i : BC_to_remove.keySet())
+				{
+					// Check if the resulting cell barcode is ambiguous
+					if (Objects.equals(BC_to_remove.get(BC_to_remove.get(i)), "none"))
+					{
+						continue;
+					}
+					
+					// Remove ambiguous reads
+					if (Objects.equals(BC_to_remove.get(i), "none"))
+					{
+						BC.setCount(i, 0);
+					}
+					else
+					{
+						// Merge the cell barcodes
+						BC.add(BC_to_remove.get(i), BC.count(i));
+						BC.setCount(i, 0);
+					}
+				}
+				System.out.printf("%s   BuildCellBarcodes   Finished merging cell barcodes%n", LocalDateTime.now().format(time_formatter));
+				System.out.printf("%s   BuildCellBarcodes   Exporting merged cell barcodes%n", LocalDateTime.now().format(time_formatter));
+				
+				// Write header row
+				bwout.write("read_count\tcell_barcodes"); bwout.newLine();
+				// Export the cell barcodes in the HashMultiset by decreasing read counts
+				String[] BC_sortedbycounts = Multisets.copyHighestCountFirst(BC).elementSet().toArray(new String[0]);
+				int export_counter = 0; // counter for the number of exported cell barcodes
+				for (String i : BC_sortedbycounts)
+				{
+					if (BC.count(i) > 0) // skip removed cell barcodes
+					{
+						bwout.write(BC.count(i) + "\t" + i);
+						bwout.newLine();
+						export_counter++;
+					}
+					
+				}
+				
+				System.out.printf("%s   BuildCellBarcodes   Done%n", LocalDateTime.now().format(time_formatter));
+				System.out.printf("\tNumber of exported cell barcodes: %,15d%n", export_counter);
+				
+				// Write to summary file
+				bwsum.write("BuildCellBarcodes: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
+				bwsum.write("Number of initial cell barcodes " + String.format("%,d", counter)); bwsum.newLine();
+				bwsum.write("Number of exported cell barcodes " + String.format("%,d", export_counter)); bwsum.newLine();
+				bwsum.write("Number of discarded ambiguous cell barcodes " + String.format("%,d", ambiguous_counter)); bwsum.newLine();
+			
+			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			
+		break;
+		}
+		
+		
 		/**
 		 * Perform cell barcode correction from aligned reads (ie, output of ReadAlignmentDropSeq)
 		 * Does NOT use any reference cell barcodes (while CellBarcodeCorrection does)
 		 * 		I=... O=... SUMMARY=...
 		 * 
 		 * Input arguments:
-		 * 		I: path to aligned/cell barcode-corrected file (txt.gz format)
-		 * 		O: path to output UMI merged file (txt.gz format)
+		 * 		I: path to aligned file (txt.gz format)
+		 * 		O: path to output cell barcode-corrected file (txt.gz format)
 		 * 		SUMMARY: path to store summary file (txt format)
 		 * 
 		 * All detected cell barcodes are merged as following:
@@ -1153,7 +1570,7 @@ public class PLA_alignment
 		 * The merged cell barcodes are then used as the reference cell barcode list, and proceed as CellBarcodeCorrection
 		 */
 		
-		case "CellBarcodeMerging":
+		case "CellBarcodeMergingOld":
 		{
 			
 			// Parse the arguments
