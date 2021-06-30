@@ -497,7 +497,6 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, p_ad
             if len(start_complex) > 0:
                 if (loop_num == 0) and (i not in start_complex):
                     temp_change[i,:] = 0
-                    tp_list.append(1)
                     continue
             temp_complex = data.index[i]
             temp_probeA, temp_probeB = temp_complex.split(sep) # target of probe A and B
@@ -505,7 +504,6 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, p_ad
             # Apply the constraints
             if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
                 temp_change[i,:] = 0
-                tp_list.append(1)
                 continue
 
             temp_expected = temp_dge[probeA==temp_probeA,:].sum(axis=0)*temp_dge[probeB==temp_probeB,:].sum(axis=0)/temp_dge.sum(axis=0)
