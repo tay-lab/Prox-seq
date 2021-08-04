@@ -61,7 +61,7 @@ public class PLA_alignment
 		
 		/**
 		 * Trim the first N bases from a fastq.gz file
-		 * I=... O=... N=...
+		 * 		I=... O=... N=...
 		 * This is used to remove the mosaic sequence from the RNA library if RNA and PLA are sequenced together
 		 * A read will only be trimmed if it is longer than N bases
 		 * 
@@ -227,8 +227,9 @@ public class PLA_alignment
 				// Set up the counters for the summary files
 				int short_read_counter = 0; // counter for the number of reads with fewer than 75 bases
 				int badUMI_counter = 0; // counter for the number of reads with invalid UMIs due to repeated G
-				int excessiveG_counter = 0; // counter for the number of reads with too many Ns
-				int excessiveN_counter = 0; // counter for the number of reads with too many Ns
+//				int excessiveG_counter = 0; // counter for the number of reads with too many Gs in the connector region
+//				int excessiveN_counter = 0; // counter for the number of reads with too many Ns
+				int ABbarcode_excessiveN_counter = 0; // counter for the number of reads with too many Ns in the antibody barcode regions
 				int bad_connector_counter = 0; // counter for the number of reads with non-matching connector sequence
 				int non_matching_AB_counter = 0; // counter of the number of reads with non-matching AB barcode
 				
@@ -236,6 +237,7 @@ public class PLA_alignment
 				String line1, line2;
 				int counter = 0; // line number counter
 				int PLA_counter = 0; // PLA product counter
+//				String connector = "TAAATCGTGTCGTGTCGTGTCTAAAG"; // connector sequence
 				String connector = "TCGTGTCGTGTCGTGTCTAAAG"; // connector sequence
 				
 				// Start reading
@@ -262,32 +264,38 @@ public class PLA_alignment
 						int connector_start_temp = 39; // temporary starting location of connector, for used in for loop
 						
 						
-						// Skip reads with at least 7 occurrences of G in the UMI region
+						// Skip reads with at least 6 occurrences of the same base in the UMI region, or at least 3 N's in the UMI region
 						if (line2.length() < 75)
 						{
 							short_read_counter++;
 						}
 						
-						else if (StringUtils.countMatches(line1.substring(12), "G") >= 7)
+						else if (
+								(StringUtils.countMatches(line1.substring(12), "A") >= 6) ||
+								(StringUtils.countMatches(line1.substring(12), "G") >= 6) ||
+								(StringUtils.countMatches(line1.substring(12), "C") >= 6) ||
+								(StringUtils.countMatches(line1.substring(12), "T") >= 6) ||
+								(StringUtils.countMatches(line1.substring(12), "N") >= 3)
+								)
 						{
 							badUMI_counter++;
 						}
 						
-						// Skip reads with excessive Gs (reads that contain only G in the connector region)
-						else if ( ( StringUtils.countMatches(line2.substring(connector_start,connector_start+connector.length()), "G") ) == connector.length() )
-						{
-							excessiveG_counter++;
-						}
+//						// Skip reads with excessive Gs (reads that contain only G in the connector region)
+//						else if ( ( StringUtils.countMatches(line2.substring(connector_start,connector_start+connector.length()), "G") ) == connector.length() )
+//						{
+//							excessiveG_counter++;
+//						}
 						
-						// Check if read 2 has more than 10 N's
-						else if (StringUtils.countMatches(line2, "N") > 10)
-						{
-							excessiveN_counter++;
-						}
+//						// Check if read 2 has more than 10 N's
+//						else if (StringUtils.countMatches(line2, "N") > 10)
+//						{
+//							excessiveN_counter++;
+//						}
 						
 						else
 						{							
-							// Locate the connector using Levenshtein distance, max allowed distance is 3
+							// Locate the connector using Levenshtein distance, max allowed distance is 2
 							// Does not need to take into account N, since the connector region doesn't usually contain N
 							int[] connector_shift = new int[] {0, -1, 1}; // allows 1-base shift
 							boolean match_connector = false; // true if matching connector is found
@@ -384,6 +392,11 @@ public class PLA_alignment
 										non_matching_AB_counter++;
 									}
 								}
+								else
+								{
+									ABbarcode_excessiveN_counter++;
+								}
+								
 							}
 							
 							else
@@ -421,9 +434,10 @@ public class PLA_alignment
 				bwsum.write("ReadAlignmentDropseq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " reads"); bwsum.newLine();
 				bwsum.write("Number of valid PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of read 2 being too short: " + String.format("%,d",short_read_counter)); bwsum.newLine();
-				bwsum.write("Number of records discarded because of excessive G in UMIs: " + String.format("%,d",badUMI_counter)); bwsum.newLine();
-				bwsum.write("Number of records discarded because of excessive number of Ns: " + String.format("%,d",excessiveN_counter)); bwsum.newLine();
-				bwsum.write("Number of records discarded because of excessive G in read 2: " + String.format("%,d",excessiveG_counter)); bwsum.newLine();
+				bwsum.write("Number of records discarded because of bad UMI region: " + String.format("%,d",badUMI_counter)); bwsum.newLine();
+//				bwsum.write("Number of records discarded because of excessive number of Ns: " + String.format("%,d",excessiveN_counter)); bwsum.newLine();
+//				bwsum.write("Number of records discarded because of excessive G in read 2: " + String.format("%,d",excessiveG_counter)); bwsum.newLine();
+				bwsum.write("Number of records discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
 
@@ -520,10 +534,12 @@ public class PLA_alignment
 				int PLA_counter = 0; // PLA product counter
 				int bad_connector_counter = 0; // counter for reads with non-matching connector
 				int bad_UMI_counter = 0; // counter of reads with bad UMI region
+				int ABbarcode_excessiveN_counter = 0; // counter of the number of reads with more than 1 N in the AB barcode region
 				int non_matching_AB_counter = 0; // counter of the number of reads with non-matching AB barcode
 				
 				// Set up for alignment
 				String R1List_temp; // current read 1 file
+				String UMI; // current UMI sequence
 				String connector = "TCGTGTCGTGTCGTGTCTAAAG"; // connector sequence
 				String[] R1List_temp_array; // array to store each line in R1List
 				
@@ -556,8 +572,9 @@ public class PLA_alignment
 								
 								read_counter++;
 								
-								// Check if the UMI region has an excessive amount of A
-								if (StringUtils.countMatches(line1.substring(1, 17), "A") >= 10)
+								// Check if the UMI region has at least 9 As, 9 Cs or 9 Ts, or at least 3 Ns
+								UMI = line1.substring(1, 5) + line1.substring(7, 11) + line1.substring(13, 17);
+								if ((StringUtils.countMatches(UMI, "A") >= 9) || (StringUtils.countMatches(UMI, "C") >= 9) || (StringUtils.countMatches(UMI, "T") >= 9) || (StringUtils.countMatches(UMI, "N") >= 3))
 								{
 									if ((read_counter % 1_000_000) == 0)
 									{
@@ -579,7 +596,7 @@ public class PLA_alignment
 								// Does not need to take into account N, since the connector region doesn't usually contain N
 								int[] connector_shift = new int[] {0, -1, 1}; // only allow up to 1-base shift of the expected starting location
 								boolean match_connector = false; // true if matching connector is found
-								int connector_distance = 3; // lowest Levenshtein distance found between the true connector and the test connector sequence, will be updated during the for loop
+								int connector_distance = 2; // lowest Levenshtein distance found between the true connector and the test connector sequence, will be updated during the for loop
 								for (int shift_i : connector_shift)
 								{
 									int temp_distance = LevenshteinDistance.getDefaultInstance().apply(line1.substring(connector_start+shift_i, connector_start+shift_i+connector.length()), connector);
@@ -704,7 +721,7 @@ public class PLA_alignment
 										
 										if (!Objects.equals(AB1_ID,"Unknown") && !Objects.equals(AB2_ID,"Unknown"))
 										{
-											bwout.write(R1List_temp_array[1] + "," + line1.substring(1, 17) + "," + AB1_ID + "," + AB2_ID);
+											bwout.write(R1List_temp_array[1] + "," + UMI + "," + AB1_ID + "," + AB2_ID);
 											bwout.newLine();
 											PLA_counter++;
 //											PLA_counter_temp++;
@@ -714,6 +731,10 @@ public class PLA_alignment
 											non_matching_AB_counter++;
 //											non_matching_AB_counter_temp++;
 										}
+									}
+									else
+									{
+										ABbarcode_excessiveN_counter++;
 									}
 									
 									// Add the found AB barcodes to the Hash Multiset ABcounts
@@ -751,8 +772,7 @@ public class PLA_alignment
 //						bwsum.newLine();
 						
 					} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths in R1List!");}
-					
-					
+						
 				}
 				
 				
@@ -765,6 +785,7 @@ public class PLA_alignment
 				bwsum.write("Total number of reads with a valid PLA product: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of bad UMI: " + String.format("%,d",bad_UMI_counter)); bwsum.newLine();
+				bwsum.write("Number of records discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
 
 				// Add to the summary file the found AB barcodes
@@ -792,7 +813,7 @@ public class PLA_alignment
 		/* ********** NEW method **********
 		 * Cell barcode correction from aligned reads (ie, output of ReadAlignmentDropSeq)
 		 * Use a list of reference cell barcodes to correct the cell barcodes of the reads
-		 * 		I=... O=... SUMMARY=...
+		 * 		I=... O=... CELL_BC_LIST=... SUMMARY=...
 		 * 
 		 * Input arguments:
 		 * 		I: path to aligned reads (txt.gz format)
@@ -800,7 +821,7 @@ public class PLA_alignment
 		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
 		 * 		CELL_BC_LIST: path to a comma-separated list of cell barcodes produced by drop-seq pipeline (rows are cell barcodes, column 0 is readcount, column 1 is the cell barcode sequence)
 		 * 		^^^^^^^^^^^^ output of drop-seq tools' BAMTagHistogram function (txt.gz format)
-		 * 		READCOUNT_CUTOFF: only keep the barcode sequence with at least this number of readcount (default is 1000)
+		 * 		READCOUNT_CUTOFF: only keep the barcode sequence with at least this number of readcount (default is 100)
 		 * 		HEADER: whether the CELL_BC_LIST have header, which will be skipped (default is false)
 		 * 
 		 * Correction method: n-gram with Hamming distance <=1
@@ -816,7 +837,7 @@ public class PLA_alignment
 			// Parse the arguments
 			String I = "", O = "", cell_BC_path = "";
 			String SUMMARY = System.getProperty("user.dir") + File.separator + "CellBarcodeCorrection_summary.txt"; // default summary file directory
-			int rc_cutoff = 1000;
+			int rc_cutoff = 100;
 			boolean skip_header = false;
 			for (int i=1; i<args.length; i++)
 			{
@@ -855,6 +876,7 @@ public class PLA_alignment
 				// Set up the counters for the summary files
 				int PLA_counter = 0; // counter for the number of valid PLA reads
 				int exact_counter = 0; // counter for the number of reads with exact match
+				int similar_counter = 0; // counter for the number of reads with 1 hamming distance
 				int ambiguous_counter = 0; // counter for the number of reads that matches ambiguously with reference cell barcodes (ie, more than 1 cell barcode with 1 hamming distance)
 				int nomatch_counter = 0; // counter for the number of reads with no match
 				int manyN_counter = 0; // counter for the number of reads with more than 1 N in the cell barcode region
@@ -929,7 +951,7 @@ public class PLA_alignment
 							// Look for matching second half
 							for (String i : BC1_mmap.get(BC1))
 							{
-								int distance = HammingDistanceCalculator(BC2, i, false); // does not allow N matching
+								int distance = HammingDistanceCalculator(BC2, i, true); // does allow N matching
 								if (distance == 0)
 								{
 									exact_counter++;
@@ -943,16 +965,17 @@ public class PLA_alignment
 								}
 							}
 						}
+						
 						// Check if the second half has a match
 						if (BC2_mmap.containsKey(BC2))
 						{
 							// Look for matching first half
 							for (String i : BC2_mmap.get(BC2))
 							{
-								int distance = HammingDistanceCalculator(BC1, i, false); // does not allow N matching
+								int distance = HammingDistanceCalculator(BC1, i, true); // does allow N matching
 								if (distance == 0)
 								{
-									exact_counter++;
+//									exact_counter++;
 									match_counter = 1;
 									break;
 								}
@@ -968,6 +991,7 @@ public class PLA_alignment
 					if (match_counter == 1)
 					{
 						PLA_counter++;
+						similar_counter++;
 						bwout.write(String.join(",", values));
 						bwout.newLine();
 					}
@@ -988,9 +1012,10 @@ public class PLA_alignment
 				
 				// Write to summary file
 				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
-				bwsum.write("Number of reference cell barcodes " + String.format("%,d", ref_counter)); bwsum.newLine();
+				bwsum.write("Number of reference cell barcodes: " + String.format("%,d", ref_counter)); bwsum.newLine();
 				bwsum.write("Number of accepted PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of exact matches: " + String.format("%,d",exact_counter)); bwsum.newLine();
+				bwsum.write("Number of reads with cell barcode corrected: " + String.format("%,d",similar_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded ambiguous reads: " + String.format("%,d",ambiguous_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded non-matching reads: " + String.format("%,d",nomatch_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded cell barcodes with more than 1 N base: " + String.format("%,d", manyN_counter)); bwsum.newLine();
@@ -1010,7 +1035,7 @@ public class PLA_alignment
 		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
 		 * 		CELL_BC_LIST: path to a comma-separated list of cell barcodes produced by drop-seq pipeline (rows are cell barcodes, column 0 is readcount, column 1 is the cell barcode sequence)
 		 * 		^^^^^^^^^^^^ output of drop-seq tools' BAMTagHistogram function (txt.gz format)
-		 * 		READCOUNT_CUTOFF: only keep the barcode sequence with at least this number of readcount (default is 1000)
+		 * 		READCOUNT_CUTOFF: only keep the barcode sequence with at least this number of readcount (default is 100)
 		 * 		HEADER: whether the CELL_BC_LIST have header, which will be skipped (default is false)
 		 * 
 		 * Correction method: n-gram with Hamming distance <=1
@@ -1026,7 +1051,7 @@ public class PLA_alignment
 			// Parse the arguments
 			String I = "", O = "", cell_BC_path = "";
 			String SUMMARY = System.getProperty("user.dir") + File.separator + "CellBarcodeCorrection_summary.txt"; // default summary file directory
-			int rc_cutoff = 1000;
+			int rc_cutoff = 100;
 			boolean skip_header = false;
 			for (int i=1; i<args.length; i++)
 			{
@@ -2096,9 +2121,7 @@ public class PLA_alignment
 		 * 		O: path to output UMI merged file (txt.gz format)
 		 * 		SUMMARY: path to store summary file
 		 * 
-		 * Merge the following cases:
-		 * 		Exact matches
-		 * 		Match with 1 hamming distance to another UMI that has a higher read count (or the highest read count if there're more than 1 matches)
+		 * Reads with duplicated UMIs, or with UMIs that are 1 Hamming distance away from another UMI with a higher read count are discarded.
 		 */
 		
 		case "UMIMerging":
@@ -2146,16 +2169,16 @@ public class PLA_alignment
 				bwsum.write("Start UMIMerging at " + LocalDateTime.now().withNano(0)); bwsum.newLine();
 				long my_timer = System.currentTimeMillis();
 				String line;
-				int record_counter = 0; // for time keeping
+				int read_counter = 0; // for tracking total number of input reads
 				while ((line = brI.readLine()) != null)
 				{
 					String[] values = line.split(",");
 					PLAproductmap.put(values[0] + "," + values[2] + "," + values[3], values[1]); // add feature 1 and feature 2
-					record_counter++;
-					if ((record_counter % 1_000_000) == 0)
+					read_counter++;
+					if ((read_counter % 1_000_000) == 0)
 					{
 						System.out.printf("%s   UMIMerging   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
-								LocalDateTime.now().format(time_formatter), record_counter, (System.currentTimeMillis()-my_timer)/1000);
+								LocalDateTime.now().format(time_formatter), read_counter, (System.currentTimeMillis()-my_timer)/1000);
 						my_timer = System.currentTimeMillis();
 					}
 				}
@@ -2166,6 +2189,7 @@ public class PLA_alignment
 				// Loop through each unique feature 1, and merge UMI from the same feature 1 that are within 1 hamming distance
 				int counter = 0; // total record counter
 				int unique_counter = 0; // unique PLA product counter
+				int UMI_merged_counter = 0; // counter for number of merged (ie, removed) UMI
 				my_timer = System.currentTimeMillis();
 				System.out.printf("%s   UMIMerging   Start merging UMI%n", LocalDateTime.now().format(time_formatter));
 				for (String str_i : PLAproductmap.keySet())
@@ -2186,7 +2210,7 @@ public class PLA_alignment
 					// Sort the HashMultiset by decreasing occurrences, and save to an array
 					String[] temp_UMI_sortedbycounts = Multisets.copyHighestCountFirst(temp_UMIcounts).elementSet().toArray(new String[0]);
 					
-					// Iterate through the unique UMIs in order of increasing occurrences, and convert UMIs to UMIs that are within 1 hamming distance and have higher read counts
+					// Iterate through the list of unique UMIs in order of increasing occurrences, and remove UMIs that are 1 hamming distance away from another UMI with a higher read count
 					// ****Slow step**** probably faster with BK-Tree //
 					for (int j=(temp_UMI_sortedbycounts.length-1); j>=0; j--)
 					{
@@ -2194,8 +2218,9 @@ public class PLA_alignment
 						Set<String> temp_UMI = new HashSet<>(temp_UMI_updated);
 						for (String str_j : temp_UMI)
 						{
-							if (HammingDistanceCalculator(str_j, temp_UMI_sortedbycounts[j], true) == 1)
+							if ( (HammingDistanceCalculator(str_j, temp_UMI_sortedbycounts[j], true) == 1) && (temp_UMIcounts.count(str_j) > temp_UMIcounts.count(temp_UMI_sortedbycounts[j])) )
 							{
+								UMI_merged_counter++;
 								temp_UMI_updated.remove(temp_UMI_sortedbycounts[j]);
 								break;
 							}
@@ -2224,9 +2249,10 @@ public class PLA_alignment
 				System.out.printf("\tNumber of unique PLA products: %,15d%n", unique_counter);
 				
 				// Write to summary file
-				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " unique cell barcode-PLA pair combinations"); bwsum.newLine();
+				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine();
+				bwsum.write("Number of unique barcode-PLA product combinations: " + String.format("%,d", counter)); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Number of unique PLA products: " + String.format("%,d", unique_counter)); bwsum.newLine(); bwsum.newLine();
-
+				bwsum.write("Number of merged UMIs across all single-cell barcodes: " + String.format("%,d", UMI_merged_counter)); bwsum.newLine(); bwsum.newLine();
 				
 				
 			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
@@ -2236,7 +2262,7 @@ public class PLA_alignment
 		
 		/**
 		 * Tally the read counts each cell barcode receives
-		 * Intended to be used before UMIMerging
+		 * Intended to be used for output of CellBarcodeCorrection
 		 * 		I=... O=...
 		 * 
 		 * Input arguments
@@ -2341,6 +2367,13 @@ public class PLA_alignment
 				}
 			}
 			
+			// Write out the command line arguments
+			for (String j : args)
+			{
+				System.out.println(j);
+			}
+			System.out.printf("%n");
+			
 			// Read the list of chosen cell barcodes
 			// hash set to store chosen cell barcodes, ordered by read counts from drop-seq tools (0 index = most reads)
 			Set<String> chosen_BC = new LinkedHashSet<>();
@@ -2395,6 +2428,7 @@ public class PLA_alignment
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid I or DUPLICATE_EXPORT argument!");}
 			
+			// Export digital count
 			try (
 					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
 					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
@@ -2418,7 +2452,7 @@ public class PLA_alignment
 				String line;
 				System.out.printf("%s   DigitalCount   Counting PLA products%n", LocalDateTime.now().format(time_formatter));
 				Multiset<String> PLAproduct = HashMultiset.create(); // count the UMIs for each combination of cell barcode-PLA pair
-				Set<String> PLA_ID = new TreeSet<>(); // hash set to store unique PLA pairs, ordered by AB1 ID alphabetically
+				Set<String> PLA_ID = new TreeSet<>(); // hash set to store unique PLA pairs, ordered alphabetically by PLA product's name
 				while ((line = brI.readLine()) != null)
 				{
 					String[] values = line.split(",");
@@ -2431,7 +2465,7 @@ public class PLA_alignment
 						}
 						
 						// Remove duplicate if required
-						if (PLAduplicate.count(values[1] + "_" + values[2] + ":" + values[3])> 1)
+						if (PLAduplicate.count(values[1] + "_" + values[2] + ":" + values[3]) > 1)
 						{
 							duplicate_counter++;
 							if (remove_duplicate)
@@ -2523,10 +2557,8 @@ public class PLA_alignment
 				for (String j : args)
 				{
 					bwsum.write(j); bwsum.newLine();
-					System.out.println(j);
 				}
 				bwsum.newLine();
-				System.out.println();
 			
 				
 				// Read the AB look up table into an array
