@@ -51,6 +51,7 @@ public class PLA_alignment
 	}
 	public static int HammingDistanceCalculator(String str1, String str2) {return HammingDistanceCalculator(str1, str2, false);} // overloading: default allowN is false
 	
+	
 	public static void main(String[] args)
 	{
 		// Time format
@@ -206,16 +207,28 @@ public class PLA_alignment
 				bwsum.newLine();
 				System.out.println();
 				
-				// Read the AB look up table into an array
-				List<List<String>> ABarray = new ArrayList<List<String>>();
-				String ABline;
+//				// Read the AB look up table into an array
+//				List<List<String>> ABarray = new ArrayList<List<String>>();
+//				String ABline;
+//				if (skip_header) {brAB.readLine();} // skip first line
+//				while ((ABline=brAB.readLine()) != null)
+//				{
+//					String[] values = ABline.split(",");
+//					ABarray.add(Arrays.asList(values));
+//				}
+				// Read the AB look up table into a hashmap: key is antibody barcode, value is protein id
+				HashMap<String, String> ABbarcodes = new HashMap<String, String>();
 				if (skip_header) {brAB.readLine();} // skip first line
+				String ABline;
 				while ((ABline=brAB.readLine()) != null)
 				{
 					String[] values = ABline.split(",");
-					ABarray.add(Arrays.asList(values));
+					ABbarcodes.put(values[1], values[0]);
 				}
-	
+				
+				// Hash Multiset to store detected AB1 and AB2 barcodes and their read count
+				Multiset<String> AB1counts = HashMultiset.create();
+				Multiset<String> AB2counts = HashMultiset.create();
 				
 				/**
 				 * Process read 1 and 2
@@ -232,6 +245,7 @@ public class PLA_alignment
 				int ABbarcode_excessiveN_counter = 0; // counter for the number of reads with too many Ns in the antibody barcode regions
 				int bad_connector_counter = 0; // counter for the number of reads with non-matching connector sequence
 				int non_matching_AB_counter = 0; // counter of the number of reads with non-matching AB barcode
+				int ambiguous_AB_counter = 0; // counter for number of reads with ambiguous AB barcode (ie, matching to more than 1 AB barcodes with 1 Hamming distance)
 				
 				// Set up for alignment
 				String line1, line2;
@@ -271,11 +285,11 @@ public class PLA_alignment
 						}
 						
 						else if (
-								(StringUtils.countMatches(line1.substring(12), "A") >= 6) ||
-								(StringUtils.countMatches(line1.substring(12), "G") >= 6) ||
-								(StringUtils.countMatches(line1.substring(12), "C") >= 6) ||
-								(StringUtils.countMatches(line1.substring(12), "T") >= 6) ||
-								(StringUtils.countMatches(line1.substring(12), "N") >= 3)
+									(StringUtils.countMatches(line1.substring(12), "A") >= 6) ||
+									(StringUtils.countMatches(line1.substring(12), "G") >= 6) ||
+									(StringUtils.countMatches(line1.substring(12), "C") >= 6) ||
+									(StringUtils.countMatches(line1.substring(12), "T") >= 6) ||
+									(StringUtils.countMatches(line1.substring(12), "N") >= 3)
 								)
 						{
 							badUMI_counter++;
@@ -323,15 +337,15 @@ public class PLA_alignment
 								String AB1_ID = "Unknown";
 								String AB2_ID = "Unknown";
 							
-								// Initialize variables to store hamming distance for each AB1 and 2 barcode
-								int[] temp1 = new int[ABarray.size()];
-								int[] temp2 = new int[ABarray.size()];
+								// Temporary AB ID
+								String AB1_ID_temp = "";
+								String AB2_ID_temp = "";
 								
 								// Check if there is a frameshift, in order to locate AB2 correctly
 								int shift_j = line2.substring(connector_start, connector_start+connector.length()+1).indexOf("TAAAG"); // location of AAAG in the found connector region
 								if (shift_j == -1)
 								{
-									if ((((counter-1)/4+1) % 1000000) == 0)
+									if ((((counter-1)/4+1) % 1_000_000) == 0)
 									{
 										System.out.printf("%s   ReadAlignmentDropSeq   Processed %,15d records   Elapsed time for last 1,000,000 reads: %ds%n",
 												LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
@@ -353,39 +367,78 @@ public class PLA_alignment
 								{
 									// Counter for # of matches with 1 hamming distance
 									int match_counter1 = 0, match_counter2 = 0;
-									// Index for matches with 1 hamming distance
-									int match_index1 = -1, match_index2 = -1;
+
 									
-									for (int i=0; (i<ABarray.size()) && ((AB1_ID=="Unknown") || (AB2_ID=="Unknown")) && ((match_counter1<2) && (match_counter2<2)); i++)
+//									for (int i=0; (i<ABarray.size()) && ((AB1_ID=="Unknown") || (AB2_ID=="Unknown")) && ((match_counter1<2) && (match_counter2<2)); i++)
+									for (String AB_i : ABbarcodes.keySet())
 									{
-										// Calculate Hamming distance
-										temp1[i] = HammingDistanceCalculator(AB1_found, ABarray.get(i).get(1), true);
-										temp2[i] = HammingDistanceCalculator(AB2_found, ABarray.get(i).get(1), true);
+										// Exit loop if both AB1 and AB2 barcodes have been found
+										if (!Objects.equals(AB1_ID,"Unknown") && !Objects.equals(AB2_ID,"Unknown"))
+										{
+											break;
+										}
+										// Exit loop if there is ambiguous match
+										else if ((match_counter1 > 1) || (match_counter2 > 1))
+										{
+											ambiguous_AB_counter++;
+											break;
+										}
+										
 										
 										// Allow early termination of for loop if found an exact match
-										if (temp1[i] == 0)
+										if (Objects.equals(AB1_ID,"Unknown"))
 										{
-											AB1_ID = ABarray.get(i).get(0);
+											// Calculate Hamming distance
+											int dist1 = HammingDistanceCalculator(AB1_found, AB_i, true);
+											
+											if (dist1 == 0)
+											{
+												AB1_ID = ABbarcodes.get(AB_i);
+											}
+											else if (dist1 == 1)
+											{
+												match_counter1++; 
+												AB1_ID_temp = ABbarcodes.get(AB_i);
+											}
 										}
-										else if (temp1[i] == 1) {match_counter1++; match_index1 = i;}
 										
-										if (temp2[i] == 0)
+										if (Objects.equals(AB2_ID,"Unknown"))
 										{
-											AB2_ID = ABarray.get(i).get(0);
+											// Calculate Hamming distance
+											int dist2 = HammingDistanceCalculator(AB2_found, AB_i, true);
+											
+											if (dist2 == 0)
+											{
+												AB2_ID = ABbarcodes.get(AB_i);
+											}
+											else if (dist2 == 1)
+											{
+												match_counter2++;
+												AB2_ID_temp = ABbarcodes.get(AB_i);
+											}
 										}
-										else if (temp2[i] == 1) {match_counter2++; match_index2 = i;}
 										
 									}
 									
 									// Find unambiguous match with 1 Hamming distance (ie, discard reads that have more than 1 matches with 1 hamming distance
-									if (match_counter1 == 1) {AB1_ID = ABarray.get(match_index1).get(0);}
-									if (match_counter2 == 1) {AB2_ID = ABarray.get(match_index2).get(0);}
+									if ((match_counter1 == 1) && Objects.equals(AB1_ID,"Unknown"))
+									{
+										AB1_ID = AB1_ID_temp;
+									}
+									if ((match_counter2 == 1) && Objects.equals(AB2_ID,"Unknown"))
+									{
+										AB2_ID = AB2_ID_temp;
+									}
 									
 									if (!Objects.equals(AB1_ID,"Unknown") && !Objects.equals(AB2_ID,"Unknown"))
 									{
 										bwout.write(line1.substring(0, 12)+","+line1.substring(12)+","+AB1_ID+","+AB2_ID);
 										bwout.newLine();
 										PLA_counter++;
+										
+										// Add the detected AB ID to the Hash Multiset ABcounts
+										AB1counts.add(AB1_ID);
+										AB2counts.add(AB2_ID);
 									}
 									else
 									{
@@ -403,15 +456,11 @@ public class PLA_alignment
 							{
 								bad_connector_counter++;
 							}
-							
-							
-							
+											
 						}
 						
-						
-						
-						
-						if ((((counter-1)/4+1) % 1000000) == 0)
+							
+						if ((((counter-1)/4+1) % 1_000_000) == 0)
 						{
 							System.out.printf("%s   ReadAlignmentDropSeq   Processed %,15d records   Elapsed time for last 1,000,000 reads: %ds%n",
 									LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
@@ -434,29 +483,43 @@ public class PLA_alignment
 				bwsum.write("ReadAlignmentDropseq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " reads"); bwsum.newLine();
 				bwsum.write("Number of valid PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of read 2 being too short: " + String.format("%,d",short_read_counter)); bwsum.newLine();
-				bwsum.write("Number of records discarded because of bad UMI region: " + String.format("%,d",badUMI_counter)); bwsum.newLine();
+				bwsum.write("Number of records discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
+				bwsum.write("Number of records discarded because of bad UMI sequence: " + String.format("%,d",badUMI_counter)); bwsum.newLine();
 //				bwsum.write("Number of records discarded because of excessive number of Ns: " + String.format("%,d",excessiveN_counter)); bwsum.newLine();
 //				bwsum.write("Number of records discarded because of excessive G in read 2: " + String.format("%,d",excessiveG_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
-				bwsum.write("Number of records discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
+				bwsum.write("Total number of reads discarded because of ambiguous antibody barcode: " + String.format("%,d",ambiguous_AB_counter)); bwsum.newLine();
+
+				// Add to the summary file the found AB barcodes
+				bwsum.newLine();
+				bwsum.write("Antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
+				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
+				String[] AB1_sortedbycounts = Multisets.copyHighestCountFirst(AB1counts).elementSet().toArray(new String[0]);
+				for (String i : AB1_sortedbycounts)
+				{
+					bwsum.write(i + String.format("\t%,10d", AB1counts.count(i)) + String.format("\t%,10d", AB2counts.count(i)));
+					bwsum.newLine();
+				}
 
 			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
 			break;
 			
 		}
 			
+		
 		/**
-		 * Alignment from raw reads for smart-seq runs
-		 * R1List=... O=... ABfile=... SUMMARY=... HEADER=...
+		 * Alignment from raw reads for plate-based Smart-seq data
+		 * 		R1List=... O=... ABfile=... SUMMARY=... HEADER=...
 		 * 
 		 * Input arguments:
-		 * 		R1List: path to a csv file containing the read 1 files (fastq.gz format) and the corresponding cell barcode
-		 * 		^^^^^^ path/to/R1.fastq.gz,cell-barcode
+		 * 		R1List: path to a csv file containing the read 1 files (fastq.gz format) and the corresponding cell ID
+		 * 		^^^^^^ /path/to/R1.fastq.gz,cell_ID
 		 * 		O: path to store output file (txt.gz format)
-		 * 		ABfile: path to PLA target-DNA barcode lookup table (csv format)
+		 * 		ABfile: path to protein target-DNA barcode lookup table (csv format)
+		 * 		^^^^^^ protein_target,AGTCAGTC
 		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
-		 * 		HEADER: whether the ABfile has header to be skipped (default is false)
+		 * 		HEADER: whether the ABfile has header to be skipped (default is true)
 		 * 
 		 * Output format: cell barcodes,UMI,AB1 ID,AB2 ID
 		 * 
@@ -468,7 +531,7 @@ public class PLA_alignment
 			// Parse the arguments
 			String R1List = "", ABfile = "", O = "";
 			String SUMMARY = System.getProperty("user.dir") + File.separator + "ReadAlignmentSmartSeq_summary.txt"; // default summary file directory
-			boolean skip_header = false;
+			boolean skip_header = true;
 			for (int i=1; i<args.length; i++)
 			{
 				String[] j = args[i].split("=");
@@ -507,18 +570,27 @@ public class PLA_alignment
 				System.out.println();
 			
 				
-				// Read the AB look up table into an array
-				List<List<String>> ABarray = new ArrayList<List<String>>();
-				String ABline;
+				// Read the AB look up table into a hashmap: key is antibody barcode, value is protein id
+				HashMap<String, String> ABbarcodes = new HashMap<String, String>();
 				if (skip_header) {brAB.readLine();} // skip first line
+				String ABline;
 				while ((ABline=brAB.readLine()) != null)
 				{
 					String[] values = ABline.split(",");
-					ABarray.add(Arrays.asList(values));
+					ABbarcodes.put(values[1], values[0]);
 				}
+//				List<List<String>> ABarray = new ArrayList<List<String>>();
+//				String ABline;
+//				if (skip_header) {brAB.readLine();} // skip first line
+//				while ((ABline=brAB.readLine()) != null)
+//				{
+//					String[] values = ABline.split(",");
+//					ABarray.add(Arrays.asList(values));
+//				}
 	
-				// Hash Multiset to store unique UMIs and their number of occurrences
-				Multiset<String> ABcounts = HashMultiset.create();
+				// Hash Multiset to store detected AB1 and AB2 barcodes and their read count
+				Multiset<String> AB1counts = HashMultiset.create();
+				Multiset<String> AB2counts = HashMultiset.create();
 				
 				/**
 				 * Process read 1
@@ -536,6 +608,7 @@ public class PLA_alignment
 				int bad_UMI_counter = 0; // counter of reads with bad UMI region
 				int ABbarcode_excessiveN_counter = 0; // counter of the number of reads with more than 1 N in the AB barcode region
 				int non_matching_AB_counter = 0; // counter of the number of reads with non-matching AB barcode
+				int ambiguous_AB_counter = 0; // counter for number of reads with ambiguous AB barcode (ie, matching to more than 1 AB barcodes with 1 Hamming distance)
 				
 				// Set up for alignment
 				String R1List_temp; // current read 1 file
@@ -557,12 +630,9 @@ public class PLA_alignment
 							BufferedReader br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1List_temp_array[0])))); // read1
 						)
 					{
+						
 						// Set up the counters for each read 1 file for the summary file
 						int counter = 0; // line number counter in fastq file
-//						int PLA_counter_temp = 0; // PLA product counter
-//						int bad_connector_counter_temp = 0; // counter for reads with non-matching connector
-//						int bad_UMI_counter_temp = 0; // counter of reads with bad UMI region
-//						int non_matching_AB_counter_temp = 0; // counter of the number of reads with non-matching AB barcode
 						
 						String line1; // current line in current read 1 file
 						while ((line1=br1.readLine()) != null)
@@ -574,7 +644,12 @@ public class PLA_alignment
 								
 								// Check if the UMI region has at least 9 As, 9 Cs or 9 Ts, or at least 3 Ns
 								UMI = line1.substring(1, 5) + line1.substring(7, 11) + line1.substring(13, 17);
-								if ((StringUtils.countMatches(UMI, "A") >= 9) || (StringUtils.countMatches(UMI, "C") >= 9) || (StringUtils.countMatches(UMI, "T") >= 9) || (StringUtils.countMatches(UMI, "N") >= 3))
+								if (
+										(StringUtils.countMatches(UMI, "A") >= 9) ||
+										(StringUtils.countMatches(UMI, "C") >= 9) ||
+										(StringUtils.countMatches(UMI, "T") >= 9) ||
+										(StringUtils.countMatches(UMI, "N") >= 3)
+									)
 								{
 									if ((read_counter % 1_000_000) == 0)
 									{
@@ -619,14 +694,18 @@ public class PLA_alignment
 									// Initialize the AB ID
 									String AB1_ID = "Unknown";
 									String AB2_ID = "Unknown";
+									
+									// Temporary AB ID
+									String AB1_ID_temp = "";
+									String AB2_ID_temp = "";
 								
-									// Initialize variables to store hamming distance for each AB1 and 2 barcode
-									int[] temp1 = new int[ABarray.size()];
-									int[] temp2 = new int[ABarray.size()];
+//									// Initialize variables to store hamming distance for each AB1 and 2 barcode
+//									int[] temp1 = new int[ABarray.size()];
+//									int[] temp2 = new int[ABarray.size()];
 									
 									// Check if there is a frameshift, in order to locate AB2 correctly
 									// Find the location of TAAAG in the found connector region
-									int shift_j = line1.substring(connector_start, connector_start+connector.length()+2).indexOf("TAAAG"); // add 2 just in case there are 2 insertions
+									int shift_j = line1.substring(connector_start, connector_start+connector.length()+1).indexOf("TAAAG"); // add 2 just in case there are 2 insertions
 									if (shift_j == -1) // skip read if can't find TAAAG in the connector region
 									{
 										counter++;
@@ -638,20 +717,22 @@ public class PLA_alignment
 									
 									// Found AB barcodes
 									String AB1_found = line1.substring(connector_start-18, connector_start-18+8);
-									String AB2_found = "";
-									if ((connector_start+25-shift_j+8) <= line1.length()) // check if the read fully contains the AB2 ID
-									{
-										AB2_found = line1.substring(connector_start+25-shift_j, connector_start+25-shift_j+8);
-									}
-									else if ((connector_start+25-shift_j+8) == (line1.length()+1)) // the first 7 bases of the barcode is at the end of the read (in other words, some insertions)
-									{
-										AB2_found = line1.substring(connector_start+25-shift_j) + "N";
-									}
-									else // skip read if there are too many insertions
-									{
-										counter++;
-										continue;
-									}
+									String AB2_found = line1.substring(connector_start+25-shift_j, connector_start+25-shift_j+8);
+									
+//									String AB2_found = "";
+//									if ((connector_start+25-shift_j+8) <= line1.length()) // check if the read fully contains the AB2 ID
+//									{
+//										AB2_found = line1.substring(connector_start+25-shift_j, connector_start+25-shift_j+8);
+//									}
+//									else if ((connector_start+25-shift_j+8) == (line1.length()+1)) // the first 7 bases of the barcode is at the end of the read (in other words, some insertions)
+//									{
+//										AB2_found = line1.substring(connector_start+25-shift_j) + "N";
+//									}
+//									else // skip read if there are too many insertions
+//									{
+//										counter++;
+//										continue;
+//									}
 									
 									
 									
@@ -660,71 +741,100 @@ public class PLA_alignment
 									{
 										// Counter for # of matches with 1 hamming distance
 										int match_counter1 = 0, match_counter2 = 0;
-										// Index for matches with 1 hamming distance
-										int match_index1 = -1, match_index2 = -1;
 
 										
-										for (int i=0; (i<ABarray.size()) && (Objects.equals(AB1_ID,"Unknown") || Objects.equals(AB2_ID,"Unknown")) && ((match_counter1<=1) && (match_counter2<=1)); i++)
+//										for (int i=0; (i<ABbarcodes.size()) && (Objects.equals(AB1_ID,"Unknown") || Objects.equals(AB2_ID,"Unknown")) && ((match_counter1<=1) && (match_counter2<=1)); i++)
+										for (String AB_i : ABbarcodes.keySet())
 										{
-											// Calculate Hamming distance
-											temp1[i] = HammingDistanceCalculator(AB1_found, ABarray.get(i).get(1), true);
-											temp2[i] = HammingDistanceCalculator(AB2_found, ABarray.get(i).get(1), true);
+											// Exit loop if both AB1 and AB2 barcodes have been found
+											if (!Objects.equals(AB1_ID,"Unknown") && !Objects.equals(AB2_ID,"Unknown"))
+											{
+												break;
+											}
+											// Exit loop if there is ambiguous match
+											else if ((match_counter1 > 1) || (match_counter2 > 1))
+											{
+												ambiguous_AB_counter++;
+												break;
+											}
+											
 											
 											// Allow early termination of for loop if found an exact match
 											if (Objects.equals(AB1_ID,"Unknown"))
 											{
-												if (temp1[i] == 0)
+												// Calculate Hamming distance
+												int dist1 = HammingDistanceCalculator(AB1_found, AB_i, true);
+												
+												if (dist1 == 0)
 												{
-													AB1_ID = ABarray.get(i).get(0);
+													AB1_ID = ABbarcodes.get(AB_i);
 												}
-												else if (temp1[i] == 1)
-												{match_counter1++; match_index1 = i;}
+												else if (dist1 == 1)
+												{
+													match_counter1++; 
+													AB1_ID_temp = ABbarcodes.get(AB_i);
+												}
 											}
 											
 											if (Objects.equals(AB2_ID,"Unknown"))
 											{
-												if (temp2[i] == 0)
+												// Calculate Hamming distance
+												int dist2 = HammingDistanceCalculator(AB2_found, AB_i, true);
+												
+												if (dist2 == 0)
 												{
-													AB2_ID = ABarray.get(i).get(0);
+													AB2_ID = ABbarcodes.get(AB_i);
 												}
-												else if (temp2[i] == 1)
-												{match_counter2++; match_index2 = i;}
+												else if (dist2 == 1)
+												{
+													match_counter2++;
+													AB2_ID_temp = ABbarcodes.get(AB_i);
+												}
 											}
 											
 										}
 										
 										// Find unambiguous match with 1 Hamming distance (ie, discard reads that have more than 1 matches with 1 hamming distance
-										if (match_counter1 == 1) {AB1_ID = ABarray.get(match_index1).get(0);}
-										if (match_counter2 == 1) {AB2_ID = ABarray.get(match_index2).get(0);}
-										
-										// There can be a deletion between the connector and the end of AB1 ID --> Check for this
-										if ((match_counter1 == 0) && Objects.equals(AB1_ID,"Unknown"))
+										if ((match_counter1 == 1) && Objects.equals(AB1_ID,"Unknown"))
 										{
-											AB1_found = line1.substring(connector_start-18+1, connector_start-18+1+8);
-											match_counter1 = 0;
-											match_index1 = -1;
-											
-											for (int i=0; (i<ABarray.size()) && Objects.equals(AB1_ID,"Unknown") && (match_counter1<=1); i++)
-											{
-												// Calculate Hamming distance
-												temp1[i] = HammingDistanceCalculator(AB1_found, ABarray.get(i).get(1), true);
-												if (temp1[i] == 0)
-												{
-													AB1_ID = ABarray.get(i).get(0);
-												}
-												else if (temp1[i] == 1)
-												{match_counter1++; match_index1 = i;}
-											}
-											
-											if (match_counter1 == 1) {AB1_ID = ABarray.get(match_index1).get(0);}
+											AB1_ID = AB1_ID_temp;
 										}
+										if ((match_counter2 == 1) && Objects.equals(AB2_ID,"Unknown"))
+										{
+											AB2_ID = AB2_ID_temp;
+										}
+										
+//										// There can be a deletion between the connector and the end of AB1 ID --> Check for this
+//										if ((match_counter1 == 0) && Objects.equals(AB1_ID,"Unknown"))
+//										{
+//											AB1_found = line1.substring(connector_start-18+1, connector_start-18+1+8);
+//											match_counter1 = 0;
+//											match_index1 = -1;
+//											
+//											for (int i=0; (i<ABarray.size()) && Objects.equals(AB1_ID,"Unknown") && (match_counter1<=1); i++)
+//											{
+//												// Calculate Hamming distance
+//												temp1[i] = HammingDistanceCalculator(AB1_found, ABarray.get(i).get(1), true);
+//												if (temp1[i] == 0)
+//												{
+//													AB1_ID = ABarray.get(i).get(0);
+//												}
+//												else if (temp1[i] == 1)
+//												{match_counter1++; match_index1 = i;}
+//											}
+//											
+//											if (match_counter1 == 1) {AB1_ID = ABarray.get(match_index1).get(0);}
+//										}
 										
 										if (!Objects.equals(AB1_ID,"Unknown") && !Objects.equals(AB2_ID,"Unknown"))
 										{
 											bwout.write(R1List_temp_array[1] + "," + UMI + "," + AB1_ID + "," + AB2_ID);
 											bwout.newLine();
 											PLA_counter++;
-//											PLA_counter_temp++;
+
+											// Add the detected AB ID to the Hash Multiset ABcounts
+											AB1counts.add(AB1_ID);
+											AB2counts.add(AB2_ID);
 										}
 										else
 										{
@@ -736,10 +846,6 @@ public class PLA_alignment
 									{
 										ABbarcode_excessiveN_counter++;
 									}
-									
-									// Add the found AB barcodes to the Hash Multiset ABcounts
-									ABcounts.add(AB1_found);
-									ABcounts.add(AB2_found);
 									
 								}
 								else
@@ -784,25 +890,20 @@ public class PLA_alignment
 				bwsum.write("ReadAlignmentSmartSeq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine();
 				bwsum.write("Total number of reads with a valid PLA product: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
-				bwsum.write("Total number of reads discarded because of bad UMI: " + String.format("%,d",bad_UMI_counter)); bwsum.newLine();
-				bwsum.write("Number of records discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
+				bwsum.write("Total number of reads discarded because of bad UMI sequence: " + String.format("%,d",bad_UMI_counter)); bwsum.newLine();
+				bwsum.write("Total number of reads discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
+				bwsum.write("Total number of reads discarded because of ambiguous antibody barcode: " + String.format("%,d",ambiguous_AB_counter)); bwsum.newLine();
 
 				// Add to the summary file the found AB barcodes
 				bwsum.newLine();
-				bwsum.write("Antibody barcode\tOccurrences"); bwsum.newLine();
-				// Sort the HashMultiset by decreasing occurrences, and save the top 10 to an array
-				String[] AB_sortedbycounts = Multisets.copyHighestCountFirst(ABcounts).elementSet().toArray(new String[0]);
-				int temp_counter = 0;
-				for (String i : AB_sortedbycounts)
+				bwsum.write("Antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
+				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
+				String[] AB1_sortedbycounts = Multisets.copyHighestCountFirst(AB1counts).elementSet().toArray(new String[0]);
+				for (String i : AB1_sortedbycounts)
 				{
-					// Break for loop once read count is lower than 100
-					if (temp_counter >= 10)
-					{break;}
-					
-					bwsum.write(i + String.format("\t%,10d", ABcounts.count(i)));
+					bwsum.write(i + String.format("\t%,10d", AB1counts.count(i)) + String.format("\t%,10d", AB2counts.count(i)));
 					bwsum.newLine();
-					temp_counter++;
 				}
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
@@ -822,7 +923,7 @@ public class PLA_alignment
 		 * 		CELL_BC_LIST: path to a comma-separated list of cell barcodes produced by drop-seq pipeline (rows are cell barcodes, column 0 is readcount, column 1 is the cell barcode sequence)
 		 * 		^^^^^^^^^^^^ output of drop-seq tools' BAMTagHistogram function (txt.gz format)
 		 * 		READCOUNT_CUTOFF: only keep the barcode sequence with at least this number of readcount (default is 100)
-		 * 		HEADER: whether the CELL_BC_LIST have header, which will be skipped (default is false)
+		 * 		HEADER: whether the CELL_BC_LIST have header, which will be skipped (default is true)
 		 * 
 		 * Correction method: n-gram with Hamming distance <=1
 		 * 		Split the query cell barcode into 2 equal halves
@@ -838,7 +939,7 @@ public class PLA_alignment
 			String I = "", O = "", cell_BC_path = "";
 			String SUMMARY = System.getProperty("user.dir") + File.separator + "CellBarcodeCorrection_summary.txt"; // default summary file directory
 			int rc_cutoff = 100;
-			boolean skip_header = false;
+			boolean skip_header = true;
 			for (int i=1; i<args.length; i++)
 			{
 				String[] j = args[i].split("=");
