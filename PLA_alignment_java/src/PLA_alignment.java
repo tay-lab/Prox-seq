@@ -151,12 +151,12 @@ public class PLA_alignment
 		
 		/**
 		 * Alignment from raw reads for drop-seq runs
-		 * R1=... R2=... O=... ABfile=... SUMMARY=... HEADER=... (for doing alignment of paired reads 1 by 1)
+		 * 		R1=... R2=... O=... AB_BC_LIST=... SUMMARY=... HEADER=... (for doing alignment of paired reads 1 by 1)
 		 * 
 		 * Input arguments:
 		 * 		R1: path to read 1 file (fastq.gz format)
 		 * 		R2: path to read 2 file (fastq.gz format)
-		 * 		ABfile: path to PLA target-DNA barcode lookup table (csv format)
+		 * 		AB_BC_LIST: path to PLA target-DNA barcode lookup table (csv format)
 		 * 		O: path to store output file (txt.gz format)
 		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
 		 * 		HEADER: whether the ABfile has header to be skipped (default is false)
@@ -180,7 +180,7 @@ public class PLA_alignment
 				{
 				case "R1": R1 = j[1]; break;
 				case "R2": R2 = j[1]; break;
-				case "ABfile": ABfile = j[1]; break;
+				case "AB_BC_LIST": ABfile = j[1]; break;
 				case "O": O = j[1]; break;
 				case "SUMMARY": SUMMARY = j[1]; break;
 				case "HEADER": skip_header = "true".equalsIgnoreCase(j[1]); break;
@@ -198,7 +198,7 @@ public class PLA_alignment
 			{
 				
 				// Write out the command line arguments
-				System.out.println();
+//				System.out.println();
 				for (String j : args)
 				{
 					bwsum.write(j); bwsum.newLine();
@@ -510,13 +510,13 @@ public class PLA_alignment
 		
 		/**
 		 * Alignment from raw reads for plate-based Smart-seq data
-		 * 		R1List=... O=... ABfile=... SUMMARY=... HEADER=...
+		 * 		R1_LIST=... O=... AB_BC_LIST=... SUMMARY=... HEADER=...
 		 * 
 		 * Input arguments:
-		 * 		R1List: path to a csv file containing the read 1 files (fastq.gz format) and the corresponding cell ID
+		 * 		R1_LIST: path to a csv file containing the read 1 files (fastq.gz format) and the corresponding cell ID
 		 * 		^^^^^^ /path/to/R1.fastq.gz,cell_ID
 		 * 		O: path to store output file (txt.gz format)
-		 * 		ABfile: path to protein target-DNA barcode lookup table (csv format)
+		 * 		AB_BC_LIST: path to protein target-DNA barcode lookup table (csv format)
 		 * 		^^^^^^ protein_target,AGTCAGTC
 		 * 		SUMMARY: directory to store summary files (txt format) (default is current working directory)
 		 * 		HEADER: whether the ABfile has header to be skipped (default is true)
@@ -540,9 +540,9 @@ public class PLA_alignment
 				
 				switch (j[0])
 				{
-				case "R1List": R1List = j[1]; break;
+				case "R1_LIST": R1List = j[1]; break;
 				case "O": O = j[1]; break;
-				case "ABfile": ABfile = j[1]; break;
+				case "AB_BC_LIST": ABfile = j[1]; break;
 				case "SUMMARY": SUMMARY = j[1]; break;
 				case "HEADER": skip_header = "true".equalsIgnoreCase(j[1]); break;
 				default: throw new java.lang.IllegalArgumentException("ReadAlignmentSmartSeq: Invalid argument key specifier!");
@@ -560,7 +560,7 @@ public class PLA_alignment
 			{
 				
 				// Write out the command line arguments
-				System.out.println();
+//				System.out.println();
 				for (String j : args)
 				{
 					bwsum.write(j); bwsum.newLine();
@@ -1110,6 +1110,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   CellBarcodeCorrection   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
+				System.out.println();
 				
 				// Write to summary file
 				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
@@ -1666,6 +1667,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   BuildCellBarcodes   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of exported cell barcodes: %,15d%n", export_counter);
+				System.out.println();
 				
 				// Write to summary file
 				bwsum.write("BuildCellBarcodes: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
@@ -2207,6 +2209,7 @@ public class PLA_alignment
 				
 				// Time stamp
 				System.out.printf("%s   CheckUMIMapping   Done: processed %,d UMIs%n", LocalDateTime.now().format(time_formatter), counter);
+				System.out.println();
 				
 			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
 			
@@ -2348,6 +2351,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   UMIMerging   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of unique PLA products: %,15d%n", unique_counter);
+				System.out.println();
 				
 				// Write to summary file
 				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine();
@@ -2417,6 +2421,7 @@ public class PLA_alignment
 				}
 				
 				System.out.printf("%s   ReadcountHistogram   Done%n", LocalDateTime.now().format(time_formatter));
+				System.out.println();
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
 			
@@ -2604,6 +2609,7 @@ public class PLA_alignment
 				
 				// Time stamp
 				System.out.printf("%s   DigitalCount   Done%n", LocalDateTime.now().format(time_formatter));
+				System.out.println();
 				
 				// Write to summary file
 				bwsum.write("Number of cell barcodes: " + String.format("%,d", chosen_BC.size())); bwsum.newLine();
