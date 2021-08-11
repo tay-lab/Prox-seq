@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.TreeSet;
 import java.util.Objects;
 import java.util.zip.*;
+//import java.nio.charset.*;
 
 //import java.lang.Math;
 import java.time.format.DateTimeFormatter;
@@ -92,8 +93,8 @@ public class PLA_alignment
 			}
 			
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // input file
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))) // output file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // input file
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")) // output file
 				 )
 			{
 				// Write out the command line arguments
@@ -191,11 +192,13 @@ public class PLA_alignment
 			}
 		
 			try (
-					BufferedReader br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1)))); // read 1
-					BufferedReader br2 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R2)))); // read 2
-					BufferedReader brAB = new BufferedReader(new FileReader(ABfile)); // AB-DNA barcode look up table
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+					BufferedReader br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1)), "UTF-8")); // read 1
+					BufferedReader br2 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R2)), "UTF-8")); // read 2
+					BufferedReader brAB = new BufferedReader(new InputStreamReader(new FileInputStream(ABfile), "UTF-8")); // AB barcode file
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
+//					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
+//					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
 				 )
 			{
 				
@@ -493,7 +496,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   ReadAlignmentDropSeq   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), (counter-1)/4+1);
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 				// Write to summary file
@@ -526,7 +529,9 @@ public class PLA_alignment
 				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
 				for (int i = 0; i < 20; i++)
 				{
-					bwsum.write(nonmatch_AB1_sortedbycounts[i] + String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
+					bwsum.write(String.format("[%-20s]", nonmatch_AB1_sortedbycounts[i]) +
+							String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) +
+							String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
 					bwsum.newLine();
 				}
 
@@ -580,10 +585,13 @@ public class PLA_alignment
 //			System.out.println(R1List);
 		
 			try (
-					BufferedReader br1List = new BufferedReader(new FileReader(R1List)); // List of input read 1 files and the cell barcodes 
-					BufferedReader brAB = new BufferedReader(new FileReader(ABfile)); // AB-DNA barcode look up table
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+//					BufferedReader br1List = new BufferedReader(new FileReader(R1List, "UTF-8")); // List of input read 1 files and the cell barcodes (Java 11 or later)
+					BufferedReader br1List = new BufferedReader(new InputStreamReader(new FileInputStream(R1List), "UTF-8")); // List of input read 1 files and the cell barcodes 
+					BufferedReader brAB = new BufferedReader(new InputStreamReader(new FileInputStream(ABfile), "UTF-8")); // AB-DNA barcode look up table
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
+//					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
+//					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
 				 )
 			{
 				
@@ -657,6 +665,8 @@ public class PLA_alignment
 				{
 					R1List_temp_array = R1List_temp.split(",");
 					
+//					System.out.println(R1List_temp);
+//					System.out.println(R1List_temp_array);
 					
 					try (
 							BufferedReader br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1List_temp_array[0])))); // read1
@@ -929,7 +939,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   ReadAlignmentSmartSeq   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), read_counter);
 				System.out.printf("\tNumber of reads with a valid PLA product: %,15d%n", PLA_counter);
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 				// Write to summary file
@@ -959,12 +969,14 @@ public class PLA_alignment
 				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
 				for (int i = 0; i < 20; i++)
 				{
-					bwsum.write(nonmatch_AB1_sortedbycounts[i] + String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
+					bwsum.write(String.format("[%-20s]", nonmatch_AB1_sortedbycounts[i]) + 
+							String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + 
+							String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
 					bwsum.newLine();
 				}
 				
 				
-			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) {throw new IllegalArgumentException("ReadAlignmentSmartSeq: Invalid file paths!");}
 			break;
 		}
 		
@@ -1017,10 +1029,13 @@ public class PLA_alignment
 			}
 			
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
-					BufferedReader brBC = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(cell_BC_path)))); // cell barcode list
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // aligned reads
+					BufferedReader brBC = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(cell_BC_path)), "UTF-8")); // cell barcode list
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
+//					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
+//					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+
 				)
 			{
 				// Write out the command line arguments
@@ -1168,7 +1183,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   CellBarcodeCorrection   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 				// Write to summary file
@@ -1516,6 +1531,8 @@ public class PLA_alignment
 				
 				System.out.printf("%s   CellBarcodeCorrection   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
+				System.out.println("====================================================================================================");
+				System.out.println();
 				
 				// Write to summary file
 				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
@@ -1572,9 +1589,10 @@ public class PLA_alignment
 									
 			// Read the file once to collect the cell barcodes
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
+//					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
 				)
 			{
 				// Write out the command line arguments
@@ -1726,7 +1744,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   BuildCellBarcodes   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of exported cell barcodes: %,15d%n", export_counter);
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 				// Write to summary file
@@ -2218,8 +2236,8 @@ public class PLA_alignment
 			}
 			
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))) // output file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")) // output file
 				  )
 			{
 				// Write out the command line arguments
@@ -2269,7 +2287,7 @@ public class PLA_alignment
 				
 				// Time stamp
 				System.out.printf("%s   CheckUMIMapping   Done: processed %,d UMIs%n", LocalDateTime.now().format(time_formatter), counter);
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
@@ -2310,9 +2328,9 @@ public class PLA_alignment
 			}
 			
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
 				  )
 			{
 
@@ -2412,6 +2430,7 @@ public class PLA_alignment
 				
 				System.out.printf("%s   UMIMerging   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of unique PLA products: %,15d%n", unique_counter);
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 				// Write to summary file
@@ -2455,8 +2474,8 @@ public class PLA_alignment
 			}
 			
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))) // output file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")) // output file
 				)
 			{
 				
@@ -2482,7 +2501,7 @@ public class PLA_alignment
 				}
 				
 				System.out.printf("%s   ReadcountHistogram   Done%n", LocalDateTime.now().format(time_formatter));
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
@@ -2550,7 +2569,8 @@ public class PLA_alignment
 			if (!Objects.equals(cell_BC_path,"NONE"))
 			{
 				try (
-						BufferedReader brBC = new BufferedReader(new FileReader(cell_BC_path)); // cell barcode list
+//						BufferedReader brBC = new BufferedReader(new FileReader(cell_BC_path));
+						BufferedReader brBC = new BufferedReader(new InputStreamReader(new FileInputStream(cell_BC_path), "UTF-8")) // cell barcode list
 					)
 				{
 					
@@ -2598,9 +2618,10 @@ public class PLA_alignment
 			
 			// Export digital count
 			try (
-					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)))); // aligned reads
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+					BufferedReader brI = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(I)), "UTF-8")); // aligned reads
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
+//					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
 				)
 			{
 				// Write out the command line arguments
@@ -2671,7 +2692,7 @@ public class PLA_alignment
 				
 				// Time stamp
 				System.out.printf("%s   DigitalCount   Done%n", LocalDateTime.now().format(time_formatter));
-				System.out.println("==================================================");
+				System.out.println("====================================================================================================");
 				System.out.println();
 				
 				// Write to summary file
@@ -2694,7 +2715,6 @@ public class PLA_alignment
 			// Parse the arguments
 			String R1List = "", ABfile = "", O = "";
 			String SUMMARY = System.getProperty("user.dir") + File.separator + "ReadAlignmentSmartSeq_summary.txt"; // default summary file directory
-			boolean skip_header = false;
 			for (int i=1; i<args.length; i++)
 			{
 				String[] j = args[i].split("=");
@@ -2703,201 +2723,34 @@ public class PLA_alignment
 				
 				switch (j[0])
 				{
-				case "R1List": R1List = j[1]; break;
+				case "R1_LIST": R1List = j[1]; break;
 				case "O": O = j[1]; break;
-				case "ABfile": ABfile = j[1]; break;
+				case "AB_BC_LIST": ABfile = j[1]; break;
 				case "SUMMARY": SUMMARY = j[1]; break;
-				case "HEADER": skip_header = "true".equalsIgnoreCase(j[1]); break;
 				default: throw new java.lang.IllegalArgumentException("ReadAlignmentSmartSeq: Invalid argument key specifier!");
 				}
 			}
 			
-//			System.out.println(R1List);
+			System.out.println(R1List);
+			System.out.println(O);
+			System.out.println(ABfile);
+			System.out.println(SUMMARY);
 		
 			try (
-					BufferedReader br1List = new BufferedReader(new FileReader(R1List)); // List of input read 1 files and the cell barcodes 
-					BufferedReader brAB = new BufferedReader(new FileReader(ABfile)); // AB-DNA barcode look up table
-					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)))); // output file
-					BufferedWriter bwsum = new BufferedWriter(new FileWriter(SUMMARY)) // summary file
+					BufferedReader br1List = new BufferedReader(new InputStreamReader(new FileInputStream(R1List), "UTF-8")); // List of input read 1 files and the cell barcodes 
+					BufferedReader brAB = new BufferedReader(new InputStreamReader(new FileInputStream(ABfile), "UTF-8")); // AB-DNA barcode look up table
+					BufferedWriter bwout = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(O)), "UTF-8")); // output file
+					BufferedWriter bwsum = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(SUMMARY), "UTF-8")) // summary file
 				 )
 			{
-				
-				// Write out the command line arguments
-				System.out.println();
-				for (String j : args)
-				{
-					bwsum.write(j); bwsum.newLine();
-				}
-				bwsum.newLine();
-			
-				
-				// Read the AB look up table into an array
-				List<List<String>> ABarray = new ArrayList<List<String>>();
-				String ABline;
-				if (skip_header) {brAB.readLine();} // skip first line
-				while ((ABline=brAB.readLine()) != null)
-				{
-					String[] values = ABline.split(",");
-					ABarray.add(Arrays.asList(values));
-				}
-	
-				
-				/**
-				 * Process read 1
-				 * Read 1 contains PLA products
-				 * UMI region: 2nd base to 17th base (16-base long)
-				 * Output format: <cell barcode> , <UMI> , <AB1 ID> , <AB2 ID>
-				 * Cell barcode is equal to sample barcode
-				 */
-
-				// Set up the (total) counters for all read 1 files for the summary file
-				
-				int read_counter = 0; // read number counter for all fastq files
-				int PLA_counter = 0; // PLA product counter
-				int bad_connector_counter = 0; // counter for reads with non-matching connector
-				int bad_UMI_counter = 0; // counter of reads with bad UMI region
-				int non_matching_AB_counter = 0; // counter of the number of reads with non-matching AB barcode
-				
-				// Set up for alignment
+				System.out.println("Pass");
 				String R1List_temp; // current read 1 file
-				String connector = "TCGTGTCGTGTCGTGTCTAAAG"; // connector sequence
-				String[] R1List_temp_array; // array to store each line in R1List
-				
-				// Start reading
-				long my_timer = System.currentTimeMillis();
-				System.out.printf("%s   Start alignment%n", LocalDateTime.now().format(time_formatter));
-				bwsum.write("Start alignment at " + LocalDateTime.now()); bwsum.newLine(); bwsum.newLine();
-				
 				while ((R1List_temp=br1List.readLine()) != null)
 				{
-					R1List_temp_array = R1List_temp.split(",");
-					
-					
-					try (
-							BufferedReader br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(R1List_temp_array[0])))); // read1
-						)
-					{
-						// Set up the counters for each read 1 file for the summary file
-						int counter = 0; // line number counter in fastq file
-//						int PLA_counter_temp = 0; // PLA product counter
-//						int bad_connector_counter_temp = 0; // counter for reads with non-matching connector
-//						int bad_UMI_counter_temp = 0; // counter of reads with bad UMI region
-//						int non_matching_AB_counter_temp = 0; // counter of the number of reads with non-matching AB barcode
-						
-						String line1; // current line in current read 1 file
-						while ((line1=br1.readLine()) != null)
-						{
-							if ((counter % 4) == 1)
-							{			
-								
-								read_counter++;
-								
-								// Check if the UMI region has an excessive amount of A
-								if (StringUtils.countMatches(line1.substring(1, 17), "A") >= 10)
-								{
-									if ((read_counter % 1_000_000) == 0)
-									{
-										System.out.printf("%s   ReadAlignmentSmartSeq   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
-												LocalDateTime.now().format(time_formatter), read_counter, (System.currentTimeMillis()-my_timer)/1000);
-										my_timer = System.currentTimeMillis();
-									}
-									
-									counter++;
-									bad_UMI_counter++;
-//									bad_UMI_counter_temp++;
-									continue;
-								}
-								
-								int connector_start = 39; // expected starting location of connector is at index 39 (base 40th)
-								int connector_start_temp = 39; // temporary starting location of connector, for used in for loop
-								
-								// Locate the connector using Levenshtein distance, max allowed distance is 2
-								// Does not need to take into account N, since the connector region doesn't usually contain N
-								int[] connector_shift = new int[] {0, -1, 1}; // only allow up to 1-base shift of the expected starting location
-								boolean match_connector = false; // true if matching connector is found
-								int connector_distance = 3; // lowest Levenshtein distance found between the true connector and the test connector sequence, will be updated during the for loop
-								for (int shift_i : connector_shift)
-								{
-									int temp_distance = LevenshteinDistance.getDefaultInstance().apply(line1.substring(connector_start+shift_i, connector_start+shift_i+connector.length()), connector);
-									if ((temp_distance <= 2) && (temp_distance < connector_distance))
-										// match within 2 Levenshtein distance, and only if the temp_distance is lower than previous iterations
-									{
-										connector_distance = temp_distance;
-										connector_start_temp = connector_start + shift_i;
-										match_connector = true;
-										
-										if (temp_distance == 0)
-										{ break; }
-									}
-								}
-								connector_start = connector_start_temp;
-								
-								if (match_connector)
-								{
-									
-									// Check if there is a frameshift, in order to locate AB2 correctly
-									// Find the location of TAAAG in the found connector region
-									int shift_j = line1.substring(connector_start, connector_start+connector.length()+2).indexOf("TAAAG"); // add 2 just in case there are 2 insertions
-									if (shift_j == -1) // skip read if can't find TAAAG in the connector region
-									{
-										counter++;
-										bad_connector_counter++;
-										bwout.write(line1);
-										bwout.newLine();
-//										bad_connector_counter_temp++;
-										continue;
-									}
-									
-								}
-								else
-								{
-									bad_connector_counter++;
-//									bad_connector_counter_temp++;
-									bwout.write(line1);
-									bwout.newLine();
-								}
-								
-								
-								
-								if ((read_counter % 1_000_000) == 0)
-								{
-									System.out.printf("%s   ReadAlignmentSmartSeq   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
-											LocalDateTime.now().format(time_formatter), read_counter, (System.currentTimeMillis()-my_timer)/1000);
-									my_timer = System.currentTimeMillis();
-								}
-							}
-							
-							
-//							if ((((counter-1)/4)+1)>2000000) {System.out.printf("%s   %s   Processed %,d lines%n", LocalDateTime.now().format(time_formatter), counter); break;} // for testing purposes
-						
-							counter++;
-						}
-						
-//						bwsum.write(R1List_temp_array[0]); bwsum.newLine();
-//						bwsum.write("Number of reads with a valid PLA product: " + String.format("%,d", PLA_counter_temp)); bwsum.newLine();
-//						bwsum.write("Number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter_temp)); bwsum.newLine();
-//						bwsum.write("Number of reads discarded because of bad UMI: " + String.format("%,d",bad_UMI_counter_temp)); bwsum.newLine();
-//						bwsum.write("Number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter_temp)); bwsum.newLine();
-//						bwsum.newLine();
-						
-					} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths in R1List!");}
-					
-					
+					System.out.println(R1List_temp);
 				}
-				
-				
-				System.out.printf("%s   ReadAlignmentSmartSeq   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), read_counter);
-				System.out.printf("\tNumber of reads with a valid PLA product: %,15d%n", PLA_counter);
-				System.out.println();
-				
-				// Write to summary file
-				bwsum.write("TempDebug: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine();
-				bwsum.write("Total number of reads with a valid PLA product: " + String.format("%,d", PLA_counter)); bwsum.newLine();
-				bwsum.write("Total number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
-				bwsum.write("Total number of reads discarded because of bad UMI: " + String.format("%,d",bad_UMI_counter)); bwsum.newLine();
-				bwsum.write("Total number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
-				
-			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			
+			} catch (IOException e) {throw new IllegalArgumentException("TempDebug: Invalid file paths!");}
 			break;
 		}
 		
