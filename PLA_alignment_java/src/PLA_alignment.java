@@ -143,8 +143,10 @@ public class PLA_alignment
 				}
 				System.out.printf("%s   ReadTrimming   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), (counter-1)/4+1);
 				System.out.printf("\tThere are %,d reads shorter than %d%n", short_counter, N);
+				System.out.println("==================================================");
+				System.out.println();
 				
-			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) { throw new IllegalArgumentException("ReadTrimming: Invalid file paths!");}
 			break;
 			
 		}
@@ -226,9 +228,13 @@ public class PLA_alignment
 					ABbarcodes.put(values[1], values[0]);
 				}
 				
-				// Hash Multiset to store detected AB1 and AB2 barcodes and their read count
+				// Hash Multiset to store detected AB1 and AB2 IDs and their read count
 				Multiset<String> AB1counts = HashMultiset.create();
 				Multiset<String> AB2counts = HashMultiset.create();
+				
+				// Hash Multiset to store found non-matching AB1 and AB2 barcodes and their read count
+				Multiset<String> nonmatch_AB1counts = HashMultiset.create();
+				Multiset<String> nonmatch_AB2counts = HashMultiset.create();
 				
 				/**
 				 * Process read 1 and 2
@@ -443,6 +449,16 @@ public class PLA_alignment
 									else
 									{
 										non_matching_AB_counter++;
+										
+										// Save non-matching AB barcode
+										if (Objects.equals(AB1_ID,"Unknown"))
+										{
+											nonmatch_AB1counts.add(AB1_found);
+										}
+										if (Objects.equals(AB2_ID,"Unknown"))
+										{
+											nonmatch_AB2counts.add(AB2_found);
+										}
 									}
 								}
 								else
@@ -477,10 +493,11 @@ public class PLA_alignment
 				
 				System.out.printf("%s   ReadAlignmentDropSeq   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), (counter-1)/4+1);
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
+				System.out.println("==================================================");
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("ReadAlignmentDropseq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " reads"); bwsum.newLine();
+				bwsum.write("ReadAlignmentDropseq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",(counter-1)/4+1) + " reads"); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Number of valid PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of read 2 being too short: " + String.format("%,d",short_read_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
@@ -490,9 +507,9 @@ public class PLA_alignment
 				bwsum.write("Number of records discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
 				bwsum.write("Number of records discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of ambiguous antibody barcode: " + String.format("%,d",ambiguous_AB_counter)); bwsum.newLine();
+				bwsum.newLine();
 
 				// Add to the summary file the found AB barcodes
-				bwsum.newLine();
 				bwsum.write("Antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
 				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
 				String[] AB1_sortedbycounts = Multisets.copyHighestCountFirst(AB1counts).elementSet().toArray(new String[0]);
@@ -501,8 +518,19 @@ public class PLA_alignment
 					bwsum.write(i + String.format("\t%,10d", AB1counts.count(i)) + String.format("\t%,10d", AB2counts.count(i)));
 					bwsum.newLine();
 				}
+				bwsum.newLine();
+				
+				// Export top 20 detected non-matching AB barcodes to the summary file
+				bwsum.write("Non-matching antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
+				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
+				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
+				for (int i = 0; i < 20; i++)
+				{
+					bwsum.write(nonmatch_AB1_sortedbycounts[i] + String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
+					bwsum.newLine();
+				}
 
-			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) { throw new IllegalArgumentException("ReadAlignmentDropSeq: Invalid file paths!");}
 			break;
 			
 		}
@@ -588,9 +616,13 @@ public class PLA_alignment
 //					ABarray.add(Arrays.asList(values));
 //				}
 	
-				// Hash Multiset to store detected AB1 and AB2 barcodes and their read count
+				// Hash Multiset to store detected AB1 and AB2 IDs and their read count
 				Multiset<String> AB1counts = HashMultiset.create();
 				Multiset<String> AB2counts = HashMultiset.create();
+				
+				// Hash Multiset to store detected non-matching AB1 and AB2 barcodes and their read count
+				Multiset<String> nonmatch_AB1counts = HashMultiset.create();
+				Multiset<String> nonmatch_AB2counts = HashMultiset.create();
 				
 				/**
 				 * Process read 1
@@ -619,7 +651,7 @@ public class PLA_alignment
 				// Start reading
 				long my_timer = System.currentTimeMillis();
 				System.out.printf("%s   Start alignment%n", LocalDateTime.now().format(time_formatter));
-				bwsum.write("Start alignment at " + LocalDateTime.now()); bwsum.newLine(); bwsum.newLine();
+				bwsum.write("Start alignment at " + LocalDateTime.now()); bwsum.newLine();
 				
 				while ((R1List_temp=br1List.readLine()) != null)
 				{
@@ -767,6 +799,7 @@ public class PLA_alignment
 												
 												if (dist1 == 0)
 												{
+//													match_counter1 = 1;
 													AB1_ID = ABbarcodes.get(AB_i);
 												}
 												else if (dist1 == 1)
@@ -783,6 +816,7 @@ public class PLA_alignment
 												
 												if (dist2 == 0)
 												{
+//													match_counter2 = 1;
 													AB2_ID = ABbarcodes.get(AB_i);
 												}
 												else if (dist2 == 1)
@@ -839,6 +873,17 @@ public class PLA_alignment
 										else
 										{
 											non_matching_AB_counter++;
+											
+											// Save non-matching AB barcode
+											if (Objects.equals(AB1_ID,"Unknown"))
+											{
+												nonmatch_AB1counts.add(AB1_found);
+											}
+											if (Objects.equals(AB2_ID,"Unknown"))
+											{
+												nonmatch_AB2counts.add(AB2_found);
+											}
+											
 //											non_matching_AB_counter_temp++;
 										}
 									}
@@ -877,34 +922,47 @@ public class PLA_alignment
 //						bwsum.write("Number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter_temp)); bwsum.newLine();
 //						bwsum.newLine();
 						
-					} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths in R1List!");}
+					} catch (IOException e) {throw new IllegalArgumentException("ReadAlignmentSmartSeq: Invalid file paths in R1List!");}
 						
 				}
 				
 				
 				System.out.printf("%s   ReadAlignmentSmartSeq   Done: processed %,d reads%n", LocalDateTime.now().format(time_formatter), read_counter);
 				System.out.printf("\tNumber of reads with a valid PLA product: %,15d%n", PLA_counter);
+				System.out.println("==================================================");
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("ReadAlignmentSmartSeq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine();
+				bwsum.write("ReadAlignmentSmartSeq: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Total number of reads with a valid PLA product: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of non-matching connector sequence: " + String.format("%,d",bad_connector_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of bad UMI sequence: " + String.format("%,d",bad_UMI_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of excessive number of Ns in the antibody barcode region: " + String.format("%,d",ABbarcode_excessiveN_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of non-matching antibody barcode: " + String.format("%,d",non_matching_AB_counter)); bwsum.newLine();
 				bwsum.write("Total number of reads discarded because of ambiguous antibody barcode: " + String.format("%,d",ambiguous_AB_counter)); bwsum.newLine();
-
-				// Add to the summary file the found AB barcodes
 				bwsum.newLine();
-				bwsum.write("Antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
+
+				// Export the found AB IDs to the summary file
+				bwsum.write("Antibody ID\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
 				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
 				String[] AB1_sortedbycounts = Multisets.copyHighestCountFirst(AB1counts).elementSet().toArray(new String[0]);
 				for (String i : AB1_sortedbycounts)
 				{
-					bwsum.write(i + String.format("\t%,10d", AB1counts.count(i)) + String.format("\t%,10d", AB2counts.count(i)));
+					bwsum.write(i + String.format("%,20d", AB1counts.count(i)) + String.format("%,20d", AB2counts.count(i)));
 					bwsum.newLine();
 				}
+				bwsum.newLine();
+
+				// Export top 20 detected non-matching AB barcodes to the summary file
+				bwsum.write("Non-matching antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
+				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
+				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
+				for (int i = 0; i < 20; i++)
+				{
+					bwsum.write(nonmatch_AB1_sortedbycounts[i] + String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
+					bwsum.newLine();
+				}
+				
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
 			break;
@@ -1110,10 +1168,11 @@ public class PLA_alignment
 				
 				System.out.printf("%s   CellBarcodeCorrection   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of valid PLA products: %,15d%n", PLA_counter);
+				System.out.println("==================================================");
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
+				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Number of reference cell barcodes: " + String.format("%,d", ref_counter)); bwsum.newLine();
 				bwsum.write("Number of accepted PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of exact matches: " + String.format("%,d",exact_counter)); bwsum.newLine();
@@ -1122,7 +1181,7 @@ public class PLA_alignment
 				bwsum.write("Number of discarded non-matching reads: " + String.format("%,d",nomatch_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded cell barcodes with more than 1 N base: " + String.format("%,d", manyN_counter)); bwsum.newLine();
 				
-			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) {throw new IllegalArgumentException("CellBarcodeCorrection: Invalid file paths!");}
 			break;
 		}
 
@@ -1667,15 +1726,16 @@ public class PLA_alignment
 				
 				System.out.printf("%s   BuildCellBarcodes   Done%n", LocalDateTime.now().format(time_formatter));
 				System.out.printf("\tNumber of exported cell barcodes: %,15d%n", export_counter);
+				System.out.println("==================================================");
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("BuildCellBarcodes: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine();
+				bwsum.write("BuildCellBarcodes: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Number of initial cell barcodes " + String.format("%,d", counter)); bwsum.newLine();
 				bwsum.write("Number of exported cell barcodes " + String.format("%,d", export_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded ambiguous cell barcodes " + String.format("%,d", ambiguous_counter)); bwsum.newLine();
 			
-			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) {throw new IllegalArgumentException("BuildCellBarcodes: Invalid file paths!");}
 			
 		break;
 		}
@@ -2209,6 +2269,7 @@ public class PLA_alignment
 				
 				// Time stamp
 				System.out.printf("%s   CheckUMIMapping   Done: processed %,d UMIs%n", LocalDateTime.now().format(time_formatter), counter);
+				System.out.println("==================================================");
 				System.out.println();
 				
 			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
@@ -2262,7 +2323,7 @@ public class PLA_alignment
 					System.out.println(j);
 				}
 				bwsum.newLine();
-				System.out.printf("%n");
+				System.out.println();
 				
 				// Each PLA product is described by 2 features: [cell barcode/AB1 ID/AB2 ID], and [UMI]. We shall call these feature 1 and 2, respectively
 				// Initialize ArrayListMultimap: key is unique feature 1's, value is its corresponding feature 2's
@@ -2291,8 +2352,8 @@ public class PLA_alignment
 				System.out.printf("\tNumber of unique cell barcode-PLA pair combinations: %,15d%n", PLAproductmap.keySet().size());
 				
 				// Loop through each unique feature 1, and merge UMI from the same feature 1 that are within 1 hamming distance
-				int counter = 0; // total record counter
-				int unique_counter = 0; // unique PLA product counter
+				int counter = 0; // total counter for unique feature 1's
+				int unique_counter = 0; // unique PLA product counter (ie, total UMI count)
 				int UMI_merged_counter = 0; // counter for number of merged (ie, removed) UMI
 				my_timer = System.currentTimeMillis();
 				System.out.printf("%s   UMIMerging   Start merging UMI%n", LocalDateTime.now().format(time_formatter));
@@ -2322,7 +2383,7 @@ public class PLA_alignment
 						Set<String> temp_UMI = new HashSet<>(temp_UMI_updated);
 						for (String str_j : temp_UMI)
 						{
-							if ( (HammingDistanceCalculator(str_j, temp_UMI_sortedbycounts[j], true) == 1) && (temp_UMIcounts.count(str_j) > temp_UMIcounts.count(temp_UMI_sortedbycounts[j])) )
+							if ( (HammingDistanceCalculator(str_j, temp_UMI_sortedbycounts[j], true) == 1) && (temp_UMIcounts.count(str_j) >= temp_UMIcounts.count(temp_UMI_sortedbycounts[j])) )
 							{
 								UMI_merged_counter++;
 								temp_UMI_updated.remove(temp_UMI_sortedbycounts[j]);
@@ -2354,13 +2415,13 @@ public class PLA_alignment
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine();
-				bwsum.write("Number of unique barcode-PLA product combinations: " + String.format("%,d", counter)); bwsum.newLine(); bwsum.newLine();
-				bwsum.write("Number of unique PLA products: " + String.format("%,d", unique_counter)); bwsum.newLine(); bwsum.newLine();
-				bwsum.write("Number of merged UMIs across all single-cell barcodes: " + String.format("%,d", UMI_merged_counter)); bwsum.newLine(); bwsum.newLine();
+				bwsum.write("UMIMerging: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",read_counter) + " reads"); bwsum.newLine(); bwsum.newLine();
+				bwsum.write("Number of merged (removed) UMIs across all single-cell barcodes: " + String.format("%,d", UMI_merged_counter)); bwsum.newLine();
+				bwsum.write("Number of unique cell barcode+PLA product combinations: " + String.format("%,d", counter)); bwsum.newLine();
+				bwsum.write("Total number of unique UMIs across all single cells and PLA products: " + String.format("%,d", unique_counter)); bwsum.newLine(); bwsum.newLine();
 				
 				
-			} catch (IOException e) { throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) { throw new IllegalArgumentException("UMIMerging: Invalid file paths!");}
 			break;
 		}
 		
@@ -2421,6 +2482,7 @@ public class PLA_alignment
 				}
 				
 				System.out.printf("%s   ReadcountHistogram   Done%n", LocalDateTime.now().format(time_formatter));
+				System.out.println("==================================================");
 				System.out.println();
 				
 			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
@@ -2481,7 +2543,7 @@ public class PLA_alignment
 			System.out.printf("%n");
 			
 			// Read the list of chosen cell barcodes
-			// hash set to store chosen cell barcodes, ordered by read counts from drop-seq tools (0 index = most reads)
+			// Use hash set to store chosen cell barcodes, ordered by read counts from drop-seq tools (0 index = most reads)
 			Set<String> chosen_BC = new LinkedHashSet<>();
 			String BCline;
 			
@@ -2609,13 +2671,14 @@ public class PLA_alignment
 				
 				// Time stamp
 				System.out.printf("%s   DigitalCount   Done%n", LocalDateTime.now().format(time_formatter));
+				System.out.println("==================================================");
 				System.out.println();
 				
 				// Write to summary file
 				bwsum.write("Number of cell barcodes: " + String.format("%,d", chosen_BC.size())); bwsum.newLine();
 				bwsum.write("Number of detected duplicated PLA products: " + String.format("%,d", duplicate_counter)); bwsum.newLine();
 				
-			} catch (IOException e) {throw new IllegalArgumentException("Invalid file paths!");}
+			} catch (IOException e) {throw new IllegalArgumentException("DigitalCount: Invalid file paths!");}
 						
 			break;
 		}
