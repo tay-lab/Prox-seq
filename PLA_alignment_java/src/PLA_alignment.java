@@ -518,7 +518,9 @@ public class PLA_alignment
 				String[] AB1_sortedbycounts = Multisets.copyHighestCountFirst(AB1counts).elementSet().toArray(new String[0]);
 				for (String i : AB1_sortedbycounts)
 				{
-					bwsum.write(i + String.format("\t%,10d", AB1counts.count(i)) + String.format("\t%,10d", AB2counts.count(i)));
+					bwsum.write(String.format("%-20s", i) +
+							String.format("\t%,10d", AB1counts.count(i)) +
+							String.format("\t%,10d", AB2counts.count(i)));
 					bwsum.newLine();
 				}
 				bwsum.newLine();
@@ -529,7 +531,7 @@ public class PLA_alignment
 				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
 				for (int i = 0; i < 20; i++)
 				{
-					bwsum.write(String.format("[%-20s]", nonmatch_AB1_sortedbycounts[i]) +
+					bwsum.write(String.format("%-20s", nonmatch_AB1_sortedbycounts[i]) +
 							String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) +
 							String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
 					bwsum.newLine();
@@ -958,7 +960,9 @@ public class PLA_alignment
 				String[] AB1_sortedbycounts = Multisets.copyHighestCountFirst(AB1counts).elementSet().toArray(new String[0]);
 				for (String i : AB1_sortedbycounts)
 				{
-					bwsum.write(i + String.format("%,20d", AB1counts.count(i)) + String.format("%,20d", AB2counts.count(i)));
+					bwsum.write(String.format("%-20s", i) + 
+							String.format("%,20d", AB1counts.count(i)) + 
+							String.format("%,20d", AB2counts.count(i)));
 					bwsum.newLine();
 				}
 				bwsum.newLine();
@@ -969,7 +973,7 @@ public class PLA_alignment
 				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
 				for (int i = 0; i < 20; i++)
 				{
-					bwsum.write(String.format("[%-20s]", nonmatch_AB1_sortedbycounts[i]) + 
+					bwsum.write(String.format("%-20s", nonmatch_AB1_sortedbycounts[i]) + 
 							String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + 
 							String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
 					bwsum.newLine();
