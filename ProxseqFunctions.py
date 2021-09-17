@@ -48,19 +48,19 @@ def calculateProteinAbundance(data, sep=':'):
 
     '''
 
-    # Get AB1 and AB2 of each row of data
-    AB1 = np.array([s.split(sep)[0] for s in data.index])
-    AB2 = np.array([s.split(sep)[1] for s in data.index])
+    # Get probeA and probeB of each row of data
+    probeA = np.array([s.split(sep)[0] for s in data.index])
+    probeB = np.array([s.split(sep)[1] for s in data.index])
 
     # Get the unique antibody targets
-    AB_unique = np.unique(np.concatenate((AB1,AB2)))
+    AB_unique = np.unique(np.concatenate((probeA,probeB)))
     AB_unique.sort()
 
     # Initialize output dataframes
     output = pd.DataFrame(0, index=AB_unique, columns=data.columns)
 
     for i in output.index:
-        output.loc[i,:] = (data.loc[AB1==i,:]).sum(axis=0) + (data.loc[AB2==i,:]).sum(axis=0)
+        output.loc[i,:] = (data.loc[probeA==i,:]).sum(axis=0) + (data.loc[probeB==i,:]).sum(axis=0)
 
     return output
 
@@ -87,24 +87,24 @@ def calculateProbeAbundance(data, sep=':'):
 
     '''
 
-    # Get AB1 and AB2 of each row of data
-    AB1 = np.array([s.split(sep)[0] for s in data.index])
-    AB2 = np.array([s.split(sep)[1] for s in data.index])
+    # Get probeA and probeB of each row of data
+    probeA = np.array([s.split(sep)[0] for s in data.index])
+    probeB = np.array([s.split(sep)[1] for s in data.index])
 
-    # Get the unique AB1 and AB2 probe targets
-    AB1_unique = list(set(AB1))
-    AB2_unique = list(set(AB2))
-    AB1_unique.sort()
-    AB2_unique.sort()
+    # Get the unique probeA and probeB probe targets
+    probeA_unique = list(set(probeA))
+    probeB_unique = list(set(probeB))
+    probeA_unique.sort()
+    probeB_unique.sort()
 
     # Initialize temporary data frames
-    output1 = pd.DataFrame(0, index=AB1_unique, columns=data.columns) # store abundance of all probe A
-    output2 = pd.DataFrame(0, index=AB2_unique, columns=data.columns) # store abundance of all probe B
+    output1 = pd.DataFrame(0, index=probeA_unique, columns=data.columns) # store abundance of all probe A
+    output2 = pd.DataFrame(0, index=probeB_unique, columns=data.columns) # store abundance of all probe B
 
     for i in output1.index:
-        output1.loc[i,:] = data.loc[AB1==i,:].sum(axis=0)
+        output1.loc[i,:] = data.loc[probeA==i,:].sum(axis=0)
     for i in output2.index:
-        output2.loc[i,:] = data.loc[AB2==i,:].sum(axis=0)
+        output2.loc[i,:] = data.loc[probeB==i,:].sum(axis=0)
     output1.index = [f"{i}_A" for i in output1.index]
     output2.index = [f"{i}_B" for i in output2.index]
 
@@ -138,11 +138,11 @@ def calculateExpected(data, PLA_list=None, sep=':'):
         PLA_list = data.index
     output = pd.DataFrame(columns=data.columns, index=PLA_list)
 
-    # Get AB1 and AB2 of each row of data
-    AB1 = np.array([s.split(sep)[0] for s in data.index])
-    AB2 = np.array([s.split(sep)[1] for s in data.index])
+    # Get probe A and B identity of each row of data
+    probeA = np.array([s.split(sep)[0] for s in data.index])
+    probeB = np.array([s.split(sep)[1] for s in data.index])
     for i in PLA_list:
-        output.loc[i,:] = data.loc[AB1==i.split(sep)[0],:].sum(axis=0).to_numpy()*data.loc[AB2==i.split(sep)[1],:].sum(axis=0).to_numpy()/data.sum(axis=0).to_numpy()
+        output.loc[i,:] = data.loc[probeA==i.split(sep)[0],:].sum(axis=0).to_numpy()*data.loc[probeB==i.split(sep)[1],:].sum(axis=0).to_numpy()/data.sum(axis=0).to_numpy()
 
     return output
 
