@@ -142,7 +142,7 @@ def calculateExpected(data, PLA_list=None, sep=':'):
     AB1 = np.array([s.split(sep)[0] for s in data.index])
     AB2 = np.array([s.split(sep)[1] for s in data.index])
     for i in PLA_list:
-        output.loc[i,:] = data.loc[AB1==i.split(sep)[0],:].sum(axis=0)*data.loc[AB2==i.split(sep)[1],:].sum(axis=0)/data.sum(axis=0)
+        output.loc[i,:] = data.loc[AB1==i.split(sep)[0],:].sum(axis=0).to_numpy()*data.loc[AB2==i.split(sep)[1],:].sum(axis=0).to_numpy()/data.sum(axis=0).to_numpy()
 
     return output
 
@@ -159,7 +159,7 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The adjustment values from the last iteration are used to update the adjustment values in the next iteration
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
-def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, p_adjust=False,
+def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adjust=True, sym_weight=0.25,
                       df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
     '''
     Estimate complex abundance by iteratively solving a system of quadratic equations.
@@ -179,11 +179,15 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, p_ad
     mean_cutoff : float
         PLA products whose estimated complex abundance at each iteration fails
         the 1-sided t-test sample mean>mean_cutoff is kept as 0.
-    sym_weight : float (0 <= sym_weight <= 1).
-        The weight factor used to enforce symmetry condition.
+        Default is 0.
+    p_cutoff : float
+        The alpha level to decide if the 1-sided t-test is sinificant.
+        Default is 0.05.
     p_adjust : boolean
         Whether to perform FDR correction for the one-sided t-test.
-        Default is False.
+        Default is True.
+    sym_weight : float (0 <= sym_weight <= 1).
+        The weight factor used to enforce symmetry condition.
     df_guess : pandas data frame
         First guesses of true complex abundance (must be the same shape as data).
         If None (the default), use 0 as the first guess.
@@ -261,7 +265,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, p_ad
 
         # Multiple comparison correction
         if p_adjust:
-            _, tp_adj, _,_ = multipletests(tp_list, alpha=0.01, method='fdr_bh')
+            _, tp_adj, _,_ = multipletests(tp_list, alpha=p_cutoff, method='fdr_bh')
         else:
             tp_adj = tp_list
 
@@ -287,7 +291,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, sym_weight=0.25, p_ad
 
             # Check to see if the estimated abundance passes the mean_cutoff
             # Ha: sample mean > mean_cutoff
-            if (tp_adj[i] > 0.01):
+            if (tp_adj[i] > p_cutoff):
                 # check for symmetry
                 temp_symmetry = dge_out[data.index==f"{temp_probeB}{sep}{temp_probeA}",:]
                 if np.mean(temp_symmetry) > mean_cutoff:
