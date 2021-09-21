@@ -159,8 +159,8 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The adjustment values from the last iteration are used to update the adjustment values in the next iteration
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
-def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adjust=True, sym_weight=0.25,
-                      df_guess=None, start_complex=[], nIter=100, tol=5, sep=':'):
+def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adjust=True,
+                      sym_weight=0.25, df_guess=None, nIter=100, tol=5, sep=':'):
     '''
     Estimate complex abundance by iteratively solving a system of quadratic equations.
 
@@ -179,7 +179,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adju
     mean_cutoff : float
         PLA products whose estimated complex abundance at each iteration fails
         the 1-sided t-test sample mean>mean_cutoff is kept as 0.
-        Default is 0.
+        Default is 1.
     p_cutoff : float
         The alpha level to decide if the 1-sided t-test is sinificant.
         Default is 0.05.
@@ -187,13 +187,11 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adju
         Whether to perform FDR correction for the one-sided t-test.
         Default is True.
     sym_weight : float (0 <= sym_weight <= 1).
-        The weight factor used to enforce symmetry condition.
+        The weight factor used to enforce symmetry condition. 0 means no enforcement.
+        Default is 0.25.
     df_guess : pandas data frame
         First guesses of true complex abundance (must be the same shape as data).
         If None (the default), use 0 as the first guess.
-    start_complex : list
-         List of complexes to estimate during the first iteration (ie, in the
-         first iteration, only these complexes will be used for calculation).
     nIter : int
         Max number of iterations to perform.
     tol : float
@@ -210,10 +208,9 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adju
     '''
 
     # Convert input data frame into numpy array
-    dge = data.copy().values
+    dge = data.to_numpy(copy=True)
     # Convert non_complexes list to sets
     non_complex = set(non_complex)
-    start_complex = set(start_complex)
 
     # Get a list of probe A and B targets
     probeA = np.array([s.split(sep)[0] for s in data.index])
@@ -224,32 +221,30 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adju
     if df_guess is None:
         dge_out = np.zeros(dge.shape)
     else:
-        dge_out = df_guess.values
+        dge_out = df_guess.to_numpy()
 
     # Iteration
     loop_num = 0
     max_change = tol + 1
     while (loop_num < nIter) and (max_change > tol):
 
-
-        # List to store the one-sided t-test p-values
-        tp_list = []
+        # Dict to store the one-sided t-test p-values
+        tp_all = {}
 
         temp_dge = dge - dge_out
         # First pass: get all the p-values
-        for i in range(dge.shape[0]):
+        for i in range(data.shape[0]):
 
-            # Go through start_complex first
-            if len(start_complex) > 0:
-                if (loop_num == 0) and (i not in start_complex):
-                    tp_list.append(1)
-                    continue
+            # if this PLA product is not detected in any cells, skip
+            if np.sum(dge[i,:]) == 0:
+                continue
+
+            # target of probe A and B
             temp_complex = data.index[i]
-            temp_probeA, temp_probeB = temp_complex.split(sep) # target of probe A and B
+            temp_probeA, temp_probeB = temp_complex.split(sep)
 
             # Apply the constraints
             if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
-                tp_list.append(1)
                 continue
 
             temp_expected = temp_dge[probeA==temp_probeA,:].sum(axis=0)*temp_dge[probeB==temp_probeB,:].sum(axis=0)/temp_dge.sum(axis=0)
@@ -259,27 +254,30 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adju
             # Ha: sample mean > mean_cutoff
             tval, tp = stats.ttest_1samp(temp_diff, mean_cutoff)
             if (tval > 0):
-                tp_list.append(tp/2)
+                tp_all[data.index[i]] = tp/2
             else:
-                tp_list.append(1-tp/2)
+                tp_all[data.index[i]] = 1-tp/2
 
+        # Convert p-values dictionary to series
+        tp_all = pd.Series(tp_all)
         # Multiple comparison correction
         if p_adjust:
-            _, tp_adj, _,_ = multipletests(tp_list, alpha=p_cutoff, method='fdr_bh')
+            _, tp_adj, _,_ = multipletests(tp_all.to_numpy(), alpha=p_cutoff, method='fdr_bh')
+            tp_adj = pd.Series(tp_adj, index=tp_all.index)
         else:
-            tp_adj = tp_list
+            tp_adj = tp_all
 
         # Array to store the change in the complex estimates
         temp_change = np.zeros(dge.shape) + tol + 1
         # Second pass: calculate protein complex
-        for i in range(dge.shape[0]):
-            # Go through start_complex first
-            if len(start_complex) > 0:
-                if (loop_num == 0) and (i not in start_complex):
-                    temp_change[i,:] = 0
-                    continue
+        for i in range(data.shape[0]):
+            # if this PLA product is not detected in any cell, skip
+            if np.sum(dge[i,:]) == 0:
+                continue
+
+            # target of probe A and B
             temp_complex = data.index[i]
-            temp_probeA, temp_probeB = temp_complex.split(sep) # target of probe A and B
+            temp_probeA, temp_probeB = temp_complex.split(sep)
 
             # Apply the constraints
             if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
@@ -291,7 +289,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=0, p_cutoff=0.05, p_adju
 
             # Check to see if the estimated abundance passes the mean_cutoff
             # Ha: sample mean > mean_cutoff
-            if (tp_adj[i] > p_cutoff):
+            if (tp_adj[data.index[i]] > p_cutoff):
                 # check for symmetry
                 temp_symmetry = dge_out[data.index==f"{temp_probeB}{sep}{temp_probeA}",:]
                 if np.mean(temp_symmetry) > mean_cutoff:
