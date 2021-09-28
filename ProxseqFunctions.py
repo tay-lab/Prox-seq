@@ -197,6 +197,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
     tol : float
         If the change in solution between current and last iteration is below
         this value, convergence is reached.
+        Default is 5.
     sep : string, optional
         The separator convention in the names of PLA complexes.
         Default is ':'.
@@ -273,6 +274,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
         for i in range(data.shape[0]):
             # if this PLA product is not detected in any cell, skip
             if np.sum(dge[i,:]) == 0:
+                temp_change[i,:] = 0
                 continue
 
             # target of probe A and B
