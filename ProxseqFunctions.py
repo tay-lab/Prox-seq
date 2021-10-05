@@ -160,7 +160,7 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 # # The process stops when the values converge, or when the maximum number of iterations is reached
 # =============================================================================
 def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adjust=True,
-                      sym_weight=0.25, df_guess=None, nIter=100, tol=5, sep=':'):
+                      sym_weight=0.25, df_guess=None, nIter=200, tol=5, sep=':'):
     '''
     Estimate complex abundance by iteratively solving a system of quadratic equations.
 
@@ -232,7 +232,18 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
         # Dict to store the one-sided t-test p-values
         tp_all = {}
 
+        # PLA product count minus previous iteration's complex count
         temp_dge = dge - dge_out
+
+        # Calculate the sum of probe A and B
+        temp_dge_probeA = {}
+        for i in set(probeA):
+            temp_dge_probeA[i] = temp_dge[probeA==i,:].sum(axis=0)
+        temp_dge_probeB = {}
+        for i in set(probeB):
+            temp_dge_probeB[i] = temp_dge[probeB==i,:].sum(axis=0)
+        temp_dge_sum = temp_dge.sum(axis=0)
+
         # First pass: get all the p-values
         for i in range(data.shape[0]):
 
@@ -248,7 +259,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
             if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
                 continue
 
-            temp_expected = temp_dge[probeA==temp_probeA,:].sum(axis=0)*temp_dge[probeB==temp_probeB,:].sum(axis=0)/temp_dge.sum(axis=0)
+            temp_expected = temp_dge_probeA[temp_probeA]*temp_dge_probeB[temp_probeB]/temp_dge_sum
             temp_diff = dge[i,:] - temp_expected
 
             # Check to see if the estimated abundance passes the mean_cutoff
@@ -286,12 +297,12 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
                 temp_change[i,:] = 0
                 continue
 
-            temp_expected = temp_dge[probeA==temp_probeA,:].sum(axis=0)*temp_dge[probeB==temp_probeB,:].sum(axis=0)/temp_dge.sum(axis=0)
-            temp_diff = dge[i,:] - temp_expected
-
             # Check to see if the estimated abundance passes the mean_cutoff
             # Ha: sample mean > mean_cutoff
-            if (tp_adj[data.index[i]] > p_cutoff):
+            if (tp_adj[data.index[i]] <= p_cutoff):
+                temp_expected = temp_dge_probeA[temp_probeA]*temp_dge_probeB[temp_probeB]/temp_dge_sum
+                temp_diff = dge[i,:] - temp_expected
+            else:
                 # check for symmetry
                 temp_symmetry = dge_out[data.index==f"{temp_probeB}{sep}{temp_probeA}",:]
                 if np.mean(temp_symmetry) > mean_cutoff:
