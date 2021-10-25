@@ -375,7 +375,7 @@ public class PLA_alignment
 								if (shift_j == -1) {
 									
 									if ((((counter-1)/4+1) % 1_000_000) == 0) {
-										System.out.printf("%s   ReadAlignmentDropSeq   Processed %,15d records   Elapsed time for last 1,000,000 reads: %ds%n",
+										System.out.printf("%s   ReadAlignmentDropSeq   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
 												LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 										my_timer = System.currentTimeMillis();
 									}
@@ -481,7 +481,7 @@ public class PLA_alignment
 						
 							
 						if ((((counter-1)/4+1) % 1_000_000) == 0) {
-							System.out.printf("%s   ReadAlignmentDropSeq   Processed %,15d records   Elapsed time for last 1,000,000 reads: %ds%n",
+							System.out.printf("%s   ReadAlignmentDropSeq   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
 									LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 							my_timer = System.currentTimeMillis();
 						}
@@ -773,7 +773,7 @@ public class PLA_alignment
 								int shift_j = line2_seq.substring(connector_start, connector_start+connector.length()+1).indexOf("TAAAG"); // location of AAAG in the found connector region
 								if (shift_j == -1) {
 									if ((((counter-1)/4+1) % 1_000_000) == 0) {
-										System.out.printf("%s   ReadAlignment10x   Processed %,15d records   Elapsed time for last 1,000,000 reads: %ds%n",
+										System.out.printf("%s   ReadAlignment10x   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
 												LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 										my_timer = System.currentTimeMillis();
 									}
@@ -877,7 +877,7 @@ public class PLA_alignment
 						
 							
 						if ((((counter-1)/4+1) % 1_000_000) == 0) {
-							System.out.printf("%s   ReadAlignment10x   Processed %,15d records   Elapsed time for last 1,000,000 reads: %ds%n",
+							System.out.printf("%s   ReadAlignment10x   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
 									LocalDateTime.now().format(time_formatter), (counter-1)/4+1, (System.currentTimeMillis()-my_timer)/1000);
 							my_timer = System.currentTimeMillis();
 						}
@@ -1528,7 +1528,7 @@ public class PLA_alignment
 						
 					// Time stamp (put here because there are continue statements below)
 					if ((counter>0) && (counter % 1000000 == 0)) {
-						System.out.printf("%s   CellBarcodeCorrection   Processed %,15d records   Elapsed time for last 1,000,000 records: %ds%n",
+						System.out.printf("%s   CellBarcodeCorrection   Processed %,15d reads   Elapsed time for last 1,000,000 reads: %ds%n",
 								LocalDateTime.now().format(time_formatter), counter, (System.currentTimeMillis()-my_timer)/1000);
 						my_timer = System.currentTimeMillis();
 					}
@@ -1615,7 +1615,7 @@ public class PLA_alignment
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine(); bwsum.newLine();
+				bwsum.write("CellBarcodeCorrection: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " reads"); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Number of reference cell barcodes: " + String.format("%,d", ref_counter)); bwsum.newLine();
 				bwsum.write("Number of accepted PLA products: " + String.format("%,d", PLA_counter)); bwsum.newLine();
 				bwsum.write("Number of exact matches: " + String.format("%,d",exact_counter)); bwsum.newLine();
@@ -1774,7 +1774,7 @@ public class PLA_alignment
 					counter++;
 					if (counter % 10000 == 0)
 					{
-						System.out.printf("%s   BuildCellBarcodes   Processed %,15d cell barcodes   Elapsed time for last 1,000,000 records: %ds%n",
+						System.out.printf("%s   BuildCellBarcodes   Processed %,15d cell barcodes   Elapsed time for last 1,000,000 reads: %ds%n",
 								LocalDateTime.now().format(time_formatter), counter, (System.currentTimeMillis()-my_timer)/1000);
 						my_timer = System.currentTimeMillis();
 					}
@@ -1819,7 +1819,7 @@ public class PLA_alignment
 				System.out.println();
 				
 				// Write to summary file
-				bwsum.write("BuildCellBarcodes: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " records"); bwsum.newLine(); bwsum.newLine();
+				bwsum.write("BuildCellBarcodes: Finished at " + LocalDateTime.now().withNano(0) + ", processed " + String.format("%,d",counter) + " reads"); bwsum.newLine(); bwsum.newLine();
 				bwsum.write("Number of initial cell barcodes " + String.format("%,d", counter)); bwsum.newLine();
 				bwsum.write("Number of exported cell barcodes " + String.format("%,d", export_counter)); bwsum.newLine();
 				bwsum.write("Number of discarded ambiguous cell barcodes " + String.format("%,d", ambiguous_counter)); bwsum.newLine();

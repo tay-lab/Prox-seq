@@ -208,10 +208,15 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
 
     '''
 
+    # The code runs faster if working with numpy array than pandas data frame
+
     # Convert input data frame into numpy array
-    dge = data.to_numpy(copy=True)
+    pla = data.to_numpy(copy=True)
     # Convert non_complexes list to sets
     non_complex = set(non_complex)
+
+    # Set of PLA products
+    pla_product_set = set(data.index)
 
     # Get a list of probe A and B targets
     probeA = np.array([s.split(sep)[0] for s in data.index])
@@ -220,9 +225,9 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
 
     # Initialize a numpy array to store estimated complex amount
     if df_guess is None:
-        dge_out = np.zeros(dge.shape)
+        complex_out = np.zeros(pla.shape)
     else:
-        dge_out = df_guess.to_numpy()
+        complex_out = df_guess.to_numpy()
 
     # Iteration
     loop_num = 0
@@ -233,22 +238,22 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
         tp_all = {}
 
         # PLA product count minus previous iteration's complex count
-        temp_dge = dge - dge_out
+        temp_pla = pla - complex_out
 
         # Calculate the sum of probe A and B
-        temp_dge_probeA = {}
+        temp_pla_probeA = {}
         for i in set(probeA):
-            temp_dge_probeA[i] = temp_dge[probeA==i,:].sum(axis=0)
-        temp_dge_probeB = {}
+            temp_pla_probeA[i] = temp_pla[probeA==i,:].sum(axis=0)
+        temp_pla_probeB = {}
         for i in set(probeB):
-            temp_dge_probeB[i] = temp_dge[probeB==i,:].sum(axis=0)
-        temp_dge_sum = temp_dge.sum(axis=0)
+            temp_pla_probeB[i] = temp_pla[probeB==i,:].sum(axis=0)
+        temp_pla_sum = temp_pla.sum(axis=0)
 
         # First pass: get all the p-values
         for i in range(data.shape[0]):
 
             # if this PLA product is not detected in any cells, skip
-            if np.sum(dge[i,:]) == 0:
+            if np.sum(pla[i,:]) == 0:
                 continue
 
             # target of probe A and B
@@ -259,8 +264,8 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
             if (temp_complex in non_complex) or (temp_probeA in non_complex) or (temp_probeB in non_complex):
                 continue
 
-            temp_expected = temp_dge_probeA[temp_probeA]*temp_dge_probeB[temp_probeB]/temp_dge_sum
-            temp_diff = dge[i,:] - temp_expected
+            temp_expected = temp_pla_probeA[temp_probeA]*temp_pla_probeB[temp_probeB]/temp_pla_sum
+            temp_diff = pla[i,:] - temp_expected
 
             # Check to see if the estimated abundance passes the mean_cutoff
             # Ha: sample mean > mean_cutoff
@@ -280,11 +285,11 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
             tp_adj = tp_all
 
         # Array to store the change in the complex estimates
-        temp_change = np.zeros(dge.shape) + tol + 1
+        temp_change = np.zeros(pla.shape) + tol + 1
         # Second pass: calculate protein complex
         for i in range(data.shape[0]):
             # if this PLA product is not detected in any cell, skip
-            if np.sum(dge[i,:]) == 0:
+            if np.sum(pla[i,:]) == 0:
                 temp_change[i,:] = 0
                 continue
 
@@ -300,36 +305,40 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
             # Check to see if the estimated abundance passes the mean_cutoff
             # Ha: sample mean > mean_cutoff
             if (tp_adj[data.index[i]] <= p_cutoff):
-                temp_expected = temp_dge_probeA[temp_probeA]*temp_dge_probeB[temp_probeB]/temp_dge_sum
-                temp_diff = dge[i,:] - temp_expected
-            else:
+                temp_expected = temp_pla_probeA[temp_probeA]*temp_pla_probeB[temp_probeB]/temp_pla_sum
+                temp_diff = pla[i,:] - temp_expected
+
+            elif (f"{temp_probeB}{sep}{temp_probeA}" in pla_product_set):
                 # check for symmetry
-                temp_symmetry = dge_out[data.index==f"{temp_probeB}{sep}{temp_probeA}",:]
+                temp_symmetry = complex_out[data.index==f"{temp_probeB}{sep}{temp_probeA}",:]
                 if np.mean(temp_symmetry) > mean_cutoff:
                     temp_diff = sym_weight*temp_symmetry
                 else:
                     temp_change[i,:] = 0
                     continue
+            else:
+                temp_change[i,:] = 0
+                continue
 
             # Force negative values to be zero <---- should be done after t-test
             temp_diff[temp_diff < 0] = 0
 
             # Check if observed is 0 but estimated is non 0, then force the estimated to be 0
             # This should only be done after t-test
-            temp_diff[(temp_diff > 0) & (dge[i,:] == 0)] = 0
+            temp_diff[(temp_diff > 0) & (pla[i,:] == 0)] = 0
 
             # Store changes in the solutions/estimates
-            temp_change[i,:] = temp_diff - dge_out[i,:]
+            temp_change[i,:] = temp_diff - complex_out[i,:]
 
             # Store the new solutions/estimates
-            dge_out[i,:] = temp_diff
+            complex_out[i,:] = temp_diff
 
         # Round the adjustment amount
-        dge_out = np.round(dge_out)
+        complex_out = np.round(complex_out)
         # Save the maximum change in the solution for convergence check
         max_change = abs(temp_change).max()
 
         loop_num += 1
 
     print(f"estimateComplexes done: Loop number {loop_num}, tolerance {max_change:.2f}")
-    return pd.DataFrame(data=dge_out, index=data.index, columns=data.columns)
+    return pd.DataFrame(data=complex_out, index=data.index, columns=data.columns)
