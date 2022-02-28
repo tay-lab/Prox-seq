@@ -30,8 +30,8 @@ import itertools
 # =============================================================================
 def calculateProteinAbundance(data, sep=':'):
     '''
-    Calculate protein abundance by summing the counts of each target, regardless of probe A or B.
-
+    Calculate protein abundance by summing the counts of each target, regardless
+    of the target of probe A and B.
 
     Parameters
     ----------
@@ -70,7 +70,8 @@ def calculateProteinAbundance(data, sep=':'):
 # =============================================================================
 def calculateProbeAbundance(data, sep=':'):
     '''
-    Calculate probe abundance by summing the counts of probes A and B of each target.
+    Calculate probe abundance by summing the counts of probes A and B of each
+    protein target.
 
     Parameters
     ----------
@@ -111,13 +112,15 @@ def calculateProbeAbundance(data, sep=':'):
     return pd.concat([output1,output2])
 
 # =============================================================================
-# # Function to calculate the expected count of a PLA product according to the noise model
+# # Function to calculate the expected random count of a PLA product if there are
+# # no protein interactions in the data
 # # Ei,j = (Xi,. + X.,j)/(X.,.)
 # # where Xi,. means sum of Xi,j over all j
 # =============================================================================
 def calculateExpected(data, PLA_list=None, sep=':'):
     '''
-    Calculate the expected count of a PLA product using marginal probabilities.
+    Calculate the expected random count of a PLA product, if no protein interactions
+    exist in the data.
 
     Parameters
     ----------
@@ -162,7 +165,9 @@ def calculateExpected(data, PLA_list=None, sep=':'):
 def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adjust=True,
                       sym_weight=0.25, df_guess=None, nIter=200, tol=5, sep=':'):
     '''
-    Estimate complex abundance by iteratively solving a system of quadratic equations.
+    Estimate complex abundance by iteratively solving a system of quadratic
+    equations. The system of equations is set up based on the expected random
+    count of each PLA product.
 
     Parameters
     ----------
@@ -178,7 +183,7 @@ def estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adju
         Default is [].
     mean_cutoff : float
         PLA products whose estimated complex abundance at each iteration fails
-        the 1-sided t-test sample mean>mean_cutoff is kept as 0.
+        the 1-sided t-test sample mean > mean_cutoff is kept as 0.
         Default is 1.
     p_cutoff : float
         The alpha level to decide if the 1-sided t-test is sinificant.
