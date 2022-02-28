@@ -74,7 +74,7 @@ Calculate the expected random count of a PLA product, if no protein interactions
 
 **estimateComplexes(data, non_complex=[], mean_cutoff=1, p_cutoff=0.05, p_adjust=True, sym_weight=0.25, df_guess=None, nIter=200, tol=5, sep=':')**
 
-Estimate complex abundance by iteratively solving a system of quadratic equations. 
+Estimate complex abundance by iteratively solving a system of quadratic equations. The system of equations is set up based on the expected random count of each PLA product.
 
     Parameters
     ----------
