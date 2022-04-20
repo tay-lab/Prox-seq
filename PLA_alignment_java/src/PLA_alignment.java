@@ -1367,7 +1367,7 @@ public class PLA_alignment
 				bwsum.write("Non-matching antibody barcode\tAntibody 1 read count\tAntibody 2 read count"); bwsum.newLine();
 				// Sort the AB1counts HashMultiset by decreasing occurrences, and save to the summary file
 				String[] nonmatch_AB1_sortedbycounts = Multisets.copyHighestCountFirst(nonmatch_AB1counts).elementSet().toArray(new String[0]);
-				for (int i = 0; i < 20; i++) {
+				for (int i = 0; i < Math.min(20, nonmatch_AB1_sortedbycounts.length); i++) {
 					bwsum.write(String.format("%-20s", nonmatch_AB1_sortedbycounts[i]) + 
 							String.format("%,20d", nonmatch_AB1counts.count(nonmatch_AB1_sortedbycounts[i])) + 
 							String.format("%,20d", nonmatch_AB2counts.count(nonmatch_AB1_sortedbycounts[i])));
