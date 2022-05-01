@@ -1,6 +1,7 @@
 /**
  * Java program for PLA alignment from raw reads
- * Command line argument example: input="abc\def.txt" (no whitespaces are allowed around the equal signs)
+ * Author: Hoang Van Phan
+ * https://github.com/tay-lab/Prox-seq
  */
 
 
