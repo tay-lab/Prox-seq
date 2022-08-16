@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Author: Hoang Van temp_change
-Address: Pritzker School of Molecular Engineering
+Author: Hoang Van Phan
+Address: Tay Lab
+         Pritzker School of Molecular Engineering
          The University of Chicago
          Chicago, IL 60637, USA
 
-This file contains the functions used to analyze PLA count data obtained from Prox-seq
+This file contains the functions used to analyze PLA product count data obtained
+from Prox-seq
 """
 
 # Import packages
