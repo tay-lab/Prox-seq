@@ -323,10 +323,10 @@ for train_idx, test_idx in KFold(n_splits=5, shuffle=True, random_state=1).split
     tpr_5m.append(tpr1p)
     auc_5m.append(auc(fpr1, tpr1))
 
-    ax.plot(fpr1, tpr1, label=f"Fold {kfold_counter}", lw=1, alpha=0.7)
+    ax.plot(fpr1, tpr1, label=f"Fold {kfold_counter}", lw=2, alpha=0.7)
     kfold_counter += 1
-ax.plot(fpr_5m, np.mean(tpr_5m,axis=0), c='k', lw=3, label='Mean')
-ax.plot([0,1], [0,1], c='r', ls='--', lw=2)
+# ax.plot(fpr_5m, np.mean(tpr_5m,axis=0), c='k', lw=3, label='Mean')
+ax.plot([0,1], [0,1], c='k', ls='--', lw=1.5)
 ax.set_xlabel("False positive rate")
 ax.set_ylabel("True positive rate")
 ax.set_title("5-minute time point")
@@ -381,10 +381,10 @@ for train_idx, test_idx in KFold(n_splits=5, shuffle=True, random_state=1).split
     auc_12h.append(auc(fpr3, tpr3))
 
     # Plot to check
-    ax.plot(fpr3, tpr3, label=f"Fold {kfold_counter}", lw=1, alpha=0.7)
+    ax.plot(fpr3, tpr3, label=f"Fold {kfold_counter}", lw=2, alpha=0.7)
     kfold_counter += 1
-ax.plot(fpr_12h, np.mean(tpr_12h,axis=0), c='k', lw=3, label='Mean')
-ax.plot([0,1], [0,1], c='r', ls='--', lw=2)
+# ax.plot(fpr_12h, np.mean(tpr_12h,axis=0), c='k', lw=3, label='Mean')
+ax.plot([0,1], [0,1], c='k', ls='--', lw=1.5)
 ax.set_xlabel("False positive rate")
 ax.set_ylabel("True positive rate")
 ax.set_title("12-hour time point")
@@ -445,10 +445,10 @@ for train_idx, test_idx in KFold(n_splits=5, shuffle=True, random_state=1).split
     lr_coef_2h[kfold_counter].index = X.columns.copy()
 
     # Plot to check
-    ax.plot(fpr2, tpr2, label=f"Fold {kfold_counter}", lw=1, alpha=0.7)
+    ax.plot(fpr2, tpr2, label=f"Fold {kfold_counter}", lw=2, alpha=0.7)
     kfold_counter += 1
-ax.plot(fpr_2h, np.mean(tpr_2h,axis=0), c='k', lw=3, label='Mean')
-ax.plot([0,1], [0,1], c='r', ls='--', lw=2)
+# ax.plot(fpr_2h, np.mean(tpr_2h,axis=0), c='k', lw=3, label='Mean')
+ax.plot([0,1], [0,1], c='k', ls='--', lw=1.5)
 ax.set_xlabel("False positive rate")
 ax.set_ylabel("True positive rate")
 ax.set_title("2-hour time point")
@@ -604,7 +604,7 @@ pla_to_plot = coef_to_plot
 dge_to_plot = dge_log.loc[pla_to_plot, Y_both_pred.index].T
 dge_to_plot['pred'] = Y_both_pred
 
-fig, ax = plt.subplots(ncols=5, nrows=2, figsize=(11.6,4.6))
+fig, ax = plt.subplots(ncols=5, nrows=2, figsize=(11.6,4.8))
 np.random.seed(1)
 for counter, i in enumerate(pla_to_plot):
     row = counter // 5
@@ -615,7 +615,10 @@ for counter, i in enumerate(pla_to_plot):
     sns.stripplot(x='pred', y=i, data=dge_to_plot, ax=ax[row,col],
                   order=["LPS","Mixed","PAM"],
                   color='k', jitter=0.28, size=3)
-    ax[row,col].set_xlabel("")
+    if row == 1:
+        ax[row,col].set_xlabel("Predicted response")
+    else:
+        ax[row,col].set_xlabel("")
     ax[row,col].set_ylabel("log10(UMI + 1)")
     ax[row,col].set_title(i)
 ax[0,0].set_yticks(np.arange(0,1.6,0.5))
@@ -624,7 +627,7 @@ ax[1,0].set_yticks([0,0.2,0.3])
 ax[1,2].set_yticks(np.arange(0,1.1,0.5))
 ax[1,3].set_yticks(np.arange(0,1.1,0.5))
 sns.despine(fig=fig)
-fig.suptitle("PLA product level", y=0.95)
+fig.suptitle("PLA product level", y=0.95, fontsize=12)
 fig.tight_layout(w_pad=1.5)
 fig.savefig("logreg_coefficients_both.svg",
             bbox_inches="tight", pad_inches=0) # Extended figure 8g

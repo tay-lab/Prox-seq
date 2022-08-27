@@ -89,33 +89,31 @@ dgeB = dgeB.loc[dgeB.sum(axis=1)>0,:]
 
 # Calculate expected
 dgeT_expected = PF.calculateExpected(dgeT)
-# Plot observed vs expected for some example PLA products
-fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(5.7,5.7))
-for counter,i in enumerate(["CD3:CD3","CD3:CD28","CD28:CD3","CD28:CD28"]):
-    row = int(counter/2)
-    col = int(counter % 2)
-    ax[row,col].scatter(dgeT_expected.loc[i,:], dgeT.loc[i,:],
+
+# Plot observed vs expected for 2 example PLA products
+fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(5.7,2.8))
+for counter,i in enumerate(["CD3:CD3","CD28:CD28"]):
+    ax[counter].scatter(dgeT_expected.loc[i,:], dgeT.loc[i,:],
                         c='black', s=12, clip_on=False)
-    _,xmax = ax[row,col].get_xlim()
-    _,ymax = ax[row,col].get_ylim()
+    _,xmax = ax[counter].get_xlim()
+    _,ymax = ax[counter].get_ylim()
     ax_max = max(xmax,ymax)
-    ax[row,col].set_xlim(-ax_max/20, ax_max)
-    ax[row,col].set_ylim(-ax_max/20, ax_max)
-    ax[row,col].plot([0,ax_max], [0,ax_max], c='red', lw=2, clip_on=True)
-    ax[row,col].set_title(i)
-    ax[row,col].set_xlabel("Expected random PLA count")
-    ax[row,col].set_ylabel("Observed PLA count")
-    ax[row,col].set_aspect('equal')
-ax[0,0].set_xticks([0,200,400,500])
-ax[0,0].set_yticks([0,200,400,500])
-ax[0,1].set_xticks(range(0,151,50))
-ax[1,0].set_xticks(range(0,151,50))
-ax[1,1].set_xticks(range(0,151,50))
+    ax[counter].set_xlim(-ax_max/20, ax_max)
+    ax[counter].set_ylim(-ax_max/20, ax_max)
+    ax[counter].plot([0,ax_max], [0,ax_max], c='red', lw=2, clip_on=True)
+    ax[counter].set_title(i)
+    ax[counter].set_xlabel("Expected random PLA count")
+    ax[counter].set_ylabel("Observed PLA count")
+    ax[counter].set_aspect('equal')
+ax[0].set_xticks([0,200,400,500])
+ax[0].set_yticks([0,200,400,500])
+ax[1].set_xticks(range(0,151,50))
 sns.despine(fig=fig)
 fig.tight_layout(w_pad=2)
-fig.savefig("Tcell_expected_example.svg", bbox_inches="tight", pad_inches=0) # Figure 2b
-# temp = dgeT_expected.loc[["CD3:CD3","CD3:CD28","CD28:CD3","CD28:CD28"],:]
-# temp = dgeT.loc[["CD3:CD3","CD3:CD28","CD28:CD3","CD28:CD28"],:]
+fig.savefig(myDir+"Tcell_expected_2example.svg",
+            bbox_inches="tight", pad_inches=0) # Figure 2b
+# temp = dgeT_expected.loc[["CD3:CD3","CD28:CD28"],:]
+# temp = dgeT.loc[["CD3:CD3","CD28:CD28"],:]
 
 # Estimate dimer abundance
 dgeT_dimers = PF.estimateComplexes(dgeT, nIter=200, non_complex=[], mean_cutoff=1,
@@ -229,40 +227,39 @@ fig.savefig("Tcell_expected_Tmarkers.png", bbox_inches="tight", pad_inches=0, dp
 # =============================================================================
 # Calculate random expected count
 dgeB_expected = PF.calculateExpected(dgeB)
-# Plot
-fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(5.7,5.7))
-for counter,i in enumerate(["HLADR:HLADR","HLADR:PDL1","PDL1:HLADR","PDL1:PDL1"]):
-    row = int(counter/2)
-    col = int(counter % 2)
-    ax[row,col].scatter(dgeB_expected.loc[i,:], dgeB.loc[i,:],
+
+# Plot 2 example PLA products
+fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(5.7,2.8))
+for counter,i in enumerate(["HLADR:HLADR","PDL1:PDL1"]):
+    ax[counter].scatter(dgeB_expected.loc[i,:], dgeB.loc[i,:],
                         s=12, c='black', clip_on=False)
     if (counter==0):
         ax_max = 400
     elif (counter==2):
         ax_max = 150
     else:
-        _,xmax = ax[row,col].get_xlim()
-        _,ymax = ax[row,col].get_ylim()
+        _,xmax = ax[counter].get_xlim()
+        _,ymax = ax[counter].get_ylim()
         ax_max = max(xmax,ymax)
-    ax[row,col].set_xlim(-ax_max/20, ax_max)
-    ax[row,col].set_ylim(-ax_max/20, ax_max)
-    ax[row,col].plot([0,ax_max], [0,ax_max], c='red', lw=2, clip_on=True)
-    ax[row,col].set_title(i)
-    ax[row,col].set_xlabel("Expected random PLA count")
-    ax[row,col].set_ylabel("Observed PLA count")
-    ax[row,col].set_aspect('equal')
-ax[0,0].set_xticks(range(0,401,100))
-ax[0,0].set_yticks(range(0,401,100))
-ax[0,1].set_xticks(range(0,101,25))
-ax[0,1].set_yticks(range(0,101,25))
-ax[1,0].set_xticks(range(0,151,50))
-ax[1,0].set_yticks(range(0,151,50))
-ax[1,1].set_xticks(range(0,201,50))
-ax[1,1].set_yticks(range(0,201,50))
+    ax[counter].set_xlim(-ax_max/20, ax_max)
+    ax[counter].set_ylim(-ax_max/20, ax_max)
+    ax[counter].plot([0,ax_max], [0,ax_max], c='red', lw=2, clip_on=True)
+    # ax[counter].fill_between(x=[0,ax_max], y1=[0,1.5*ax_max], y2=[0,ax_max/1.5],
+    #                          facecolor='red', alpha=0.25)
+    ax[counter].set_title(i)
+    ax[counter].set_xlabel("Expected random PLA count")
+    ax[counter].set_ylabel("Observed PLA count")
+    ax[counter].set_aspect('equal')
+ax[0].set_xticks(range(0,401,100))
+ax[0].set_yticks(range(0,401,100))
+ax[1].set_xticks(range(0,201,50))
+ax[1].set_yticks(range(0,201,50))
 sns.despine(fig=fig)
 fig.tight_layout(w_pad=2)
-fig.savefig("Bcell_expected_example.svg", bbox_inches="tight", pad_inches=0) # Figure 2c
-# temp = dgeB_expected.loc[["HLADR:HLADR","HLADR:PDL1","PDL1:HLADR","PDL1:PDL1"],:]
+fig.savefig(myDir+"Bcell_expected_2example.svg",
+            bbox_inches="tight", pad_inches=0) # Figure 2c
+# temp = dgeB_expected.loc[["HLADR:HLADR","PDL1:PDL1"],:]
+# temp = dgeB.loc[["HLADR:HLADR","PDL1:PDL1"],:]
 
 dgeB_dimers = PF.estimateComplexes(dgeB, nIter=200, non_complex=[], mean_cutoff=1, tol=1, sym_weight=0.25, p_adjust=True)
 dgeB_dimers_avg = dgeB_dimers.mean(axis=1)

@@ -102,11 +102,23 @@ fig.savefig(myDir+"data_analysis/figures/CD9_homo_hetero_CD4Tcells.png",
 
 #%% Separate T cells out to make the figure for protein complex prediction schematic
 dgeT = dge.loc[:,dge_protein.loc["CD3",:]>100].copy()
-dgeT_complex = PF.estimateComplexes(dgeT, tol=5, mean_cutoff=1, p_adjust=True)
 
-# Calculate expected before and after subtracting complex count
+# Calculate expected
 dgeT_expected = PF.calculateExpected(dgeT)
-dgeT_expected2 = PF.calculateExpected(dgeT-dgeT_complex)
+
+# Plot difference in observed and expected
+fig, ax = plt.subplots(figsize=(3,3.1))
+ax.hist(dgeT.loc["CD28:CD28",:]-dgeT_expected.loc["CD28:CD28",:],
+        color='silver', edgecolor='k')
+ax.axvline(x=1, c='red')
+ax.set_xticks(range(0,81,20))
+ax.set_xlabel("Difference between observed\nand expected random PLA count\n of CD28:CD28 (UMI count)")
+ax.set_ylabel("Number of cells")
+ax.set_title("Iteration 0 (before adjustment)")
+sns.despine(fig=fig)
+fig.tight_layout()
+fig.savefig(myDir+"data_analysis/figures/CD28.CD28_complex_example.svg",
+            bbox_inches="tight", pad_inches=0) # Supplementary figure 11c
 
 #%% Complex estimate
 dge_complex = {}
